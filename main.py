@@ -38,6 +38,7 @@ class StreamHandler(webapp.RequestHandler):
     if user:
       logout_url = users.create_logout_url("/")
       microUser = MicroUser.gql("WHERE nick = :1", nick).get()
+      total = pagelimit
       self.response.out.write(template.render('templates/stream.html', locals()))
     else:
       login_url = users.create_login_url('/stream')
@@ -50,8 +51,24 @@ class HomeHandler(webapp.RequestHandler):
       self.response.headers['Content-Type'] = 'application/atom+xml'
     elif type == 'json':
       self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
-    micros = MicroEntry.all().order('-date').fetch(pagelimit)
-    if micros:
+    #micros = MicroEntry.all().order('-date').fetch(pagelimit)
+    total = db.GqlQuery('SELECT * FROM MicroEntry').count()
+    # pagination
+    page = self.request.get('page')
+    if page:
+      page = int(page)
+    else:
+      page = 0
+    page1 = page + 1  
+    if total > (page + 1) * pagelimit:
+      page_prev = str(page + 1)
+    if page > 0:
+      page_next = str(page - 1)
+    num_pages = int(total/pagelimit)
+    if total%pagelimit > 0 or total < pagelimit:
+      num_pages = num_pages + 1
+    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit))  
+    if micros.count() > 0:
       latest = micros[0].date
     else:
       latest = datetime.datetime.today()
@@ -100,8 +117,23 @@ class UserHandler(webapp.RequestHandler):
     if not microUser:
       self.redirect('/')
       return
-    micros = MicroEntry.all().filter('author = ', microUser).order('-date').fetch(10)
-    if micros:
+    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', microUser).count()
+    # pagination
+    page = self.request.get('page')
+    if page:
+      page = int(page)
+    else:
+      page = 0
+    page1 = page + 1  
+    if total > (page + 1) * pagelimit:
+      page_prev = str(page + 1)
+    if page > 0:
+      page_next = str(page - 1)
+    num_pages = int(total/pagelimit)
+    if total%pagelimit > 0 or total < pagelimit:
+      num_pages = num_pages + 1
+    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit), microUser)
+    if micros.count() > 0:
       latest = micros[0].date
     else:
       latest = datetime.datetime.today()

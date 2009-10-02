@@ -19,4 +19,13 @@
   {% endfor %}
   </ul>	  
   </div>
+  <p>
+  {% if page_prev %}
+  <a href="/?page={{ page_prev }}">&lt;&lt; Older</a> 
+  {% endif %}
+  &nbsp;page {{ page1 }} of {{ num_pages }} pages.&nbsp;
+  {% if page_next %}
+  <a href="/?page={{ page_next }}">Next &gt;&gt;</a>
+  {% endif %}
+  </p>
 {% endblock %}
