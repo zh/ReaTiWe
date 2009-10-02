@@ -1,0 +1,11 @@
+*.orig
+*.rej
+*~
+*.swp
+*.o
+*.log
+*.pyc
+index.yaml
+settings.py
+deploy.sh
+run.sh

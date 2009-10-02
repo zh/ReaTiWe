@@ -1,0 +1,22 @@
+{% extends 'sidebar.html' %}
+{% block head %}
+<link rel="alternate" type="application/atom+xml" href="/atom" title="reatiwe public timeline atom feed" />
+<link rel="hub" href="https://pubsubhubbub.appspot.com/" />
+{% endblock %}
+{% block content %}
+  {% if user %}
+  <p>
+    <form action="/" method="post">
+      <textarea name="content" rows="3" cols="70"></textarea><br/>
+      <input type="submit" class="submitbutton" value="Post" />
+    </form>
+  </p>
+  {% endif %}  
+  <div id="entries">
+  {% for m in micros %}
+  <p><span class="poster"><a href="/user/{{ m.author.nick|escape }}">{{ m.author.nick|escape }}</a></span>
+       {{ m.content|escape|content }} <a href="/entry/{{ m|entityid }}">{{ m.date|timestamp }} ago</a>
+  </p>
+  {% endfor %}
+  </div>
+{% endblock %}

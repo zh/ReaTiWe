@@ -1,0 +1,13 @@
+{% extends 'sidebar.html' %}
+{% block title %}Entry {{ entry|entityid }}{% endblock %}
+{% block head %}
+<link rel="alternate" type="application/atom+xml" href="/{{ nick }}/atom" title="reatiwe public timeline atom feed" />
+<link rel="hub" href="https://pubsubhubbub.appspot.com/" />
+{% endblock %}
+{% block content %}
+  <div id="entries">
+  <p><span class="poster"><a href="/user/{{ entry.author.nick|escape }}">{{ entry.author.nick|escape }}</a></span>
+	  {{ entry.content|escape|content }} {{ entry.date|timestamp }} ago</p>
+  </div>
+  <p><a href="/">&laquo; Back to the blog</a></p>
+{% endblock %}
