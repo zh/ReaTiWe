@@ -197,3 +197,9 @@ a:hover {
   color:#fff;
   background:#c00;
 }
+
+#entries ul { list-style-type: none; margin: 0; padding: 0.5em 0 0 0; }
+#entries li div { overflow-x: auto; overflow-y: hidden; margin: 4px 0; }
+#entries .lien { padding-left: 10px; background-repeat: no-repeat; }
+#entries small { margin-left: 1em; }
+#entries li { padding-bottom: 0.75em; margin-top: 0.5em; border-bottom: 1px solid #ccc; }

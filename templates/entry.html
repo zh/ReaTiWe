@@ -6,8 +6,9 @@
 {% endblock %}
 {% block content %}
   <div id="entries">
-  <p><span class="poster"><a href="/user/{{ entry.author.nick|escape }}">{{ entry.author.nick|escape }}</a></span>
-	  {{ entry.content|escape|content }} {{ entry.date|timestamp }} ago</p>
+    <ul>	
+      <li class="lien"><big><a href="/user/{{ entry.author.nick|escape }}">@{{ entry.author.nick|escape }}</a></big><div>{{ entry.content|escape|content }}</div><small>#{{ entry|entityid }}, <span title="{{ entry.date|rfc3339datetime }}">{{ entry.date|timestamp }} ago</span></small></li>
+    </ul>	    
   </div>
   <p><a href="/">&laquo; Back to the blog</a></p>
 {% endblock %}

@@ -13,10 +13,10 @@
   </p>
   {% endif %}  
   <div id="entries">
+  <ul>	  
   {% for m in micros %}
-  <p><span class="poster"><a href="/user/{{ m.author.nick|escape }}">{{ m.author.nick|escape }}</a></span>
-       {{ m.content|escape|content }} <a href="/entry/{{ m|entityid }}">{{ m.date|timestamp }} ago</a>
-  </p>
+  <li class="lien"><big><a href="/user/{{ m.author.nick|escape }}">@{{ m.author.nick|escape }}</a></big><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a>, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span></small></li>
   {% endfor %}
+  </ul>	  
   </div>
 {% endblock %}

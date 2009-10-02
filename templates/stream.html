@@ -9,11 +9,12 @@
   {% if not entries %}
   Nothing yet.
   {% else %}
-  {% for e in entries %}
-  <p><span class="poster"><a href="/user/{{ e.author|escape }}">{{ e.author|escape }}</a></span>
-       {{ e.content|escape|content }} <a href="/entry/{{ e|entityid }}">{{ e.date|timestamp }} ago</a>
+  <ul>
+  {% for m in entries %}
+    <li class="lien"><big><a href="/user/{{ m.author.nick|escape }}">@{{ m.author.nick|escape }}</a></big><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a>, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span></small></li>	  
   </p>
   {% endfor %}
+  </ul>
   {% endif %}
   </div>
 {% endblock %}

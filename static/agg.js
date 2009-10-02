@@ -21,12 +21,14 @@ function gotStuff(status, text) {
   if (items.length == 0) {
     content = "Nothing yet.\n"
   } else {
+    content += "<ul>\n";	  
     for (var i = 0; i < items.length; ++i) {
-      content += '<p><span class="poster"><a href="/user/' + items[i].author + 
-           '">' + items[i].author + '</a></span> ' + items[i].content +
-	   ' <a href="/entry/' + items[i].id + '">' +  
-	   items[i].date + " ago.</a></p>\n";    
+      content += '<li class="lien"><big><a href="/user/' + items[i].author + '">@' + 
+	items[i].author + '</a></big><div>' + items[i].content + '</div><small><a href="' +
+	items[i].id + '">#' + items[i].id + '</a>, <span>' + items[i].date +
+	" ago</span></small></li>\n";
     }
+    content += "</ul>\n";	  
   }
 
   document.getElementById("entries").innerHTML = content;
