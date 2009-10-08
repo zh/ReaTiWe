@@ -11,9 +11,11 @@
 	
 <div id="header">
 <div class="menu">
+<span><a href="/help">Help</a></span>
 {% if user %}
 <span><a href="/user/{{ microUser.nick }}">Profile</a></span>		      
 <span><a href="/settings">Settings</a></span>
+<span><a href="/stream">Real-Time</a></span>
 <span><a href="{{ logout_url }}">Sign Out</a></span>
 {% else %}
 <span><a href="{{ login_url }}">Sign In</a></span>

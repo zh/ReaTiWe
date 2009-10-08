@@ -14,6 +14,28 @@ from models import *
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+xmpp_help = """
+Available commands:
+
+help, ? - available commands
+ping - check the connection
+auth {secret} - validate the current JID
+
+
+Available only after JID validation:
+
+on / off - enable / disable messages from the system
+
+@nick - send a message to another system user
+@me - post an entry
+
+last - show last 10 entries
+#1234 - show some entry and comments to it
+#1234 {text} - comment on some entry
+
+See also: http://reatiwe.appspot.com/help
+"""
+
 class SendHandler(webapp.RequestHandler):
   def post(self):
     try:
@@ -57,6 +79,9 @@ class XMPPHandler(webapp.RequestHandler):
     if msg[0].lower() == u"ping":
       message.reply("PONG! :)")
       return
+    elif msg[0].lower() == u"help" or  msg[0].lower() == "?":
+      message.reply(xmpp_help)
+      return
     elif msg[0].lower() == u"auth":
       token = None
       if len(msg) > 1:
@@ -95,7 +120,6 @@ class XMPPHandler(webapp.RequestHandler):
           microUser.nick = nick
           microUser.put()
       message.reply("nickname: %s" % microUser.nick)
-    # TODO: other commands - last, on, off, follow etc.
     elif msg[0].lower() == u"last":
       text = "Last messages:\n"
       micros = MicroEntry.all().order('-date').fetch(10)
@@ -115,7 +139,6 @@ class XMPPHandler(webapp.RequestHandler):
         text = msg.strip().replace('\n','').replace('\r',' ').replace('\t',' ')
         # if message is to myself, blog it
         if to_nick == u"me":
-          # TODO: replace xmpp with JID resource part
           micro = MicroEntry(author=microUser, content=text, origin=resource)
           micro.put()
           # ping the PuSH hub (current user).

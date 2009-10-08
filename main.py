@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import cgi, os, random, re, wsgiref.handlers, urllib, base64
-import logging, hashlib, feedparser
+import logging, hashlib, feedparser, markdown
 
 from google.appengine.api import urlfetch
 from datetime import datetime
@@ -10,6 +10,7 @@ from google.appengine.api import users
 from google.appengine.ext import db, webapp
 from google.appengine.ext.webapp import template
 from google.appengine.api.labs import taskqueue
+from google.appengine.api import memcache
 
 from models import *
 from xmppbots import *
@@ -44,7 +45,13 @@ class PublishHandler(webapp.RequestHandler):
       microUser = MicroUser.gql("WHERE nick = :1", nick).get()
       if not microUser:
         raise ReatiweError("User %s does not exists." % nick)
-      # ping the PuSH hub (current user)
+      # ping the PuSH hub
+      form_fields = { "hub.mode": "publish",
+                      "hub.url": "http://reatiwe.appspot.com/atom" }
+      urlfetch.fetch(url = self.request.POST['hub'],
+                     payload = urllib.urlencode(form_fields),
+                     method = urlfetch.POST,
+                     headers = {'Content-Type': 'application/x-www-form-urlencoded'})
       form_fields = { "hub.mode": "publish",
                       "hub.url": "http://reatiwe.appspot.com/user/%s/atom" % nick }
       urlfetch.fetch(url = self.request.POST['hub'],
@@ -93,11 +100,6 @@ class StreamHandler(webapp.RequestHandler):
 
 class HomeHandler(webapp.RequestHandler):
   def get(self, type='html'):
-    if type == 'atom':
-      self.response.headers['Content-Type'] = 'application/atom+xml'
-    elif type == 'json':
-      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
-    #micros = MicroEntry.all().order('-date').fetch(pagelimit)
     total = db.GqlQuery('SELECT * FROM MicroEntry').count()
     # pagination
     page = self.request.get('page')
@@ -124,8 +126,23 @@ class HomeHandler(webapp.RequestHandler):
       microUser = getMicroUser(user)
     else:
       login_url = users.create_login_url('/')
+    if type == 'atom':
+      if self.request.headers.has_key('If-Modified-Since'):
+        self.response.headers['Content-Type'] = 'application/atom+xml'
+        dt = self.request.headers.get('If-Modified-Since').split(';')[0]
+        modsince = datetime.datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
+        if (modsince + datetime.timedelta(seconds=1)) >= latest:
+          self.error(304)
+          return self.response.out.write("304 Not Modified")
+
+      self.response.headers['Last-Modified'] = latest.strftime("%a, %d %b %Y %H:%M:%S GMT")
+      expires=latest + datetime.timedelta(minutes=5)
+      self.response.headers['Expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    elif type == 'json':
+      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     path = os.path.join('templates/home.' + type)
     self.response.out.write(template.render(path, locals()))
+                                                      
   def post(self):
     user = users.get_current_user()
     if user:
@@ -164,11 +181,6 @@ class UserHandler(webapp.RequestHandler):
         self.response.set_status(200)
         return
 
-    # usual request
-    if type == 'atom':
-      self.response.headers['Content-Type'] = 'application/atom+xml'
-    elif type == 'json':
-      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
@@ -199,6 +211,18 @@ class UserHandler(webapp.RequestHandler):
       latest = micros[0].date
     else:
       latest = datetime.datetime.today()
+    if type == 'atom': 
+      if self.request.headers.has_key('If-Modified-Since'):
+        self.response.headers['Content-Type'] = 'application/atom+xml'
+        dt = self.request.headers.get('If-Modified-Since').split(';')[0]
+        modsince = datetime.datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
+        if (modsince + datetime.timedelta(seconds=1)) >= latest:
+          self.error(304)
+          return self.response.out.write("304 Not Modified")
+
+      self.response.headers['Last-Modified'] = latest.strftime("%a, %d %b %Y %H:%M:%S GMT")
+      expires=latest + datetime.timedelta(minutes=5)
+      self.response.headers['Expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
     path = os.path.join('templates/user.' + type)
     self.response.out.write(template.render(path, locals()))
   # PuSH subscriber  
@@ -372,7 +396,23 @@ class AboutHandler(webapp.RequestHandler):
       logout_url = users.create_logout_url("/")
     else:
       login_url = users.create_login_url('/about')
+    memcache.delete("reatiwe_help")  
     self.response.out.write(template.render('templates/about.html', locals()))
+
+
+class HelpHandler(webapp.RequestHandler):
+  def get(self):
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+    else:
+      login_url = users.create_login_url('/help')
+    #help_text = markdown.markdown_path("README.markdown")
+    help_text = memcache.get("reatiwe_help")
+    if not help_text:
+      help_text = markdown.markdown_path("README.markdown")
+      memcache.add("reatiwe_help", help_text, 600)
+    self.response.out.write(template.render('templates/help.html', locals()))
 
 
 def main():
@@ -392,6 +432,7 @@ def main():
     ('/publish',                   PublishHandler),
     ('/send',                      SendHandler),
     ('/about',                     AboutHandler),
+    ('/help',                      HelpHandler),
     ('/settings',                  SettingsHandler)
   ], debug=True)
   wsgiref.handlers.CGIHandler().run(application)
