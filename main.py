@@ -1,18 +1,59 @@
 # -*- coding: utf-8 -*-
 
 import cgi, os, random, re, wsgiref.handlers, urllib, base64
+import logging, hashlib, feedparser
+
 from google.appengine.api import urlfetch
 from datetime import datetime
 from django.utils import simplejson
 from google.appengine.api import users
 from google.appengine.ext import db, webapp
 from google.appengine.ext.webapp import template
+from google.appengine.api.labs import taskqueue
 
 from models import *
 from xmppbots import *
 from templatefilters import *
 
+logging.getLogger().setLevel(logging.DEBUG)
+
 pagelimit = 20
+
+
+def stripTags(s):
+# this list is neccesarry because chk() would otherwise not know
+# that intag in stripTags() is ment, and not a new intag variable in chk().
+  intag = [False]
+
+  def chk(c):
+    if intag[0]:
+      intag[0] = (c != '>')
+      return False
+    elif c == '<':
+      intag[0] = True
+      return False
+    return True
+
+  return ''.join(c for c in s if chk(c))
+
+
+class PublishHandler(webapp.RequestHandler):
+  def post(self):
+    try:
+      nick = self.request.POST['nick']
+      microUser = MicroUser.gql("WHERE nick = :1", nick).get()
+      if not microUser:
+        raise ReatiweError("User %s does not exists." % nick)
+      # ping the PuSH hub (current user)
+      form_fields = { "hub.mode": "publish",
+                      "hub.url": "http://reatiwe.appspot.com/user/%s/atom" % nick }
+      urlfetch.fetch(url = self.request.POST['hub'],
+                     payload = urllib.urlencode(form_fields),
+                     method = urlfetch.POST,
+                     headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+    except Exception, e:
+      logging.error('problem: %s' % repr(e))
+      pass
 
 
 class ItemsHandler(webapp.RequestHandler):
@@ -28,6 +69,10 @@ class ItemsHandler(webapp.RequestHandler):
       stuff.append({'id': entityid(micro),
                     'date': timestamp(micro.date),
                     'author': micro.author.nick,
+                    'name': micro.author.full_name,
+                    'origin': origin(micro.origin),
+                    'avatar': micro.author.twit_user,
+                    'replies': micro.comments,
                     'content': content(micro.content)})
     self.response.out.write(encoder.encode(stuff))
 
@@ -37,7 +82,8 @@ class StreamHandler(webapp.RequestHandler):
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
-      microUser = MicroUser.gql("WHERE nick = :1", nick).get()
+      microUser = getMicroUser(user)
+      nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
       total = pagelimit
       self.response.out.write(template.render('templates/stream.html', locals()))
     else:
@@ -75,6 +121,7 @@ class HomeHandler(webapp.RequestHandler):
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
     else:
       login_url = users.create_login_url('/')
     path = os.path.join('templates/home.' + type)
@@ -89,13 +136,10 @@ class HomeHandler(webapp.RequestHandler):
         microUser = getMicroUser(user)
         micro = MicroEntry(author=microUser, content=content)
         micro.put()
-        # ping the PuSH hub (current user)
-        form_fields = { "hub.mode": "publish", 
-                        "hub.url": "http://reatiwe.appspot.com/user/%s/atom" % microUser.nick }
-        response = urlfetch.fetch(url = "https://pubsubhubbub.appspot.com/",
-                        payload = urllib.urlencode(form_fields),
-                        method = urlfetch.POST,
-                        headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+        # ping the PuSH hub (current user).
+        # TODO: users can have different hubs
+        taskqueue.add(url="/publish",
+                      params={"nick":microUser.nick, "hub":"https://pubsubhubbub.appspot.com/"})
       self.redirect('/')  
     else:
       login_url = users.create_login_url('/')
@@ -104,6 +148,23 @@ class HomeHandler(webapp.RequestHandler):
 
 class UserHandler(webapp.RequestHandler):
   def get(self, nick, type='html'):
+    nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
+    # check if it is PuSH check request
+    challenge = self.request.get('hub.challenge')
+    topic = self.request.get('hub.topic')
+    vtoken = self.request.get('hub.verify_token')
+
+    if challenge:
+      if not nickUser or not topic or not vtoken or vtoken != nickUser.secret:
+        self.response.out.write("Bad request: Expected 'hub.challenge' and 'hub.verify_token'")
+        self.response.set_status(400)
+        return
+      else:
+        self.response.out.write(challenge)
+        self.response.set_status(200)
+        return
+
+    # usual request
     if type == 'atom':
       self.response.headers['Content-Type'] = 'application/atom+xml'
     elif type == 'json':
@@ -111,13 +172,14 @@ class UserHandler(webapp.RequestHandler):
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
     else:
       login_url = users.create_login_url('/')
-    microUser = MicroUser.gql("WHERE nick = :1", nick).get()
-    if not microUser:
+    if not nickUser:
       self.redirect('/')
       return
-    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', microUser).count()
+    
+    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', nickUser).count()
     # pagination
     page = self.request.get('page')
     if page:
@@ -132,13 +194,70 @@ class UserHandler(webapp.RequestHandler):
     num_pages = int(total/pagelimit)
     if total%pagelimit > 0 or total < pagelimit:
       num_pages = num_pages + 1
-    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit), microUser)
+    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit), nickUser)
     if micros.count() > 0:
       latest = micros[0].date
     else:
       latest = datetime.datetime.today()
     path = os.path.join('templates/user.' + type)
     self.response.out.write(template.render(path, locals()))
+  # PuSH subscriber  
+  def post(self, nick):
+    microUser = MicroUser.gql("WHERE nick = :1", nick).get()
+    if not microUser:
+      self.response.out.write("Bad request")
+      self.response.set_status(400)
+      return
+    body = self.request.body.decode('utf-8')
+    logging.info('Post body is %d characters', len(body))
+    data = feedparser.parse(self.request.body)
+    if not data:
+      self.response.out.write("Bad request: Invalid Atom feed")
+      self.response.set_status(400)
+      return
+    update_list = []
+    xmpp_text = "New entries: \n\n"
+    logging.info('Found %d entries', len(data.entries))
+    for entry in data.entries:
+      if hasattr(entry, 'content'):
+        # This is Atom.
+        entry_id = entry.id
+        content = entry.content[0].value
+        link = entry.get('link', '')
+        title = entry.get('title', '')
+      else:
+        content = entry.get('description', '')
+        title = entry.get('title', '')
+        link = entry.get('link', '')
+        entry_id = (entry.get('id', '') or link or title or content)
+      
+      content = stripTags(content)
+      uniq_id='key_' + hashlib.sha1(link + '\n' + entry_id).hexdigest()
+      exists = MicroEntry.gql("WHERE uniq_id = :1", uniq_id).get()
+      if not exists:
+        logging.info('New entry with title = "%s", id = "%s", '
+                     'link = "%s", content = "%s"',
+                     title, entry_id, link, content)
+        text = "[%s] \n" % title
+        text += "%s ...\n" % content[:200]
+        text += "%s" % link
+        update_list.append(MicroEntry(
+          title=title,
+          content=text,
+          origin="feed",
+          link=link,
+          uniq_id=uniq_id,
+          author=microUser))
+        xmpp_text += "%s\n\n" % text
+    db.put(update_list)
+    if len(update_list) > 0 and not microUser.silent:
+      taskqueue.add(url="/send", params={"from":microUser.nick, 
+                                         "to":microUser.nick, 
+                                         "message":xmpp_text, 
+                                         "secret":microUser.secret})
+    # TODO: maybe also send xmpp message. to who?
+    self.response.out.write("OK")
+    self.response.set_status(200)
 
 
 class EntryHandler(webapp.RequestHandler):
@@ -146,13 +265,35 @@ class EntryHandler(webapp.RequestHandler):
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
     else:
       login_url = users.create_login_url('/')
     entry = MicroEntry.get_by_id(int(entryid))  
     if not entry:
       self.redirect('/')
     else:
+      replies = Comment.all().filter('entry = ', entry).order('idx')
       self.response.out.write(template.render('templates/entry.html', locals()))
+
+
+class CommentHandler(webapp.RequestHandler):
+  def post(self, entryid):
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
+      entry = MicroEntry.get_by_id(int(entryid))  
+      if not entry:
+        self.redirect('/')
+      content = self.request.get('content').strip()
+      if content:
+        content = content.replace('\n','').replace('\r',' ').replace('\t',' ')
+        comment = Comment(author=microUser, content=content)
+        addCommentEntry(entry, comment)
+      self.redirect("/entry/%s" % str(entryid))  
+    else:
+      login_url = users.create_login_url('/')
+      self.redirect(login_url) 
 
 
 class SettingsHandler(webapp.RequestHandler):
@@ -163,6 +304,12 @@ class SettingsHandler(webapp.RequestHandler):
       microUser = getMicroUser(user)
       if microUser.jid == None:
         microUser.jid = db.IM("xmpp", user.email())
+      if microUser.secret == None:
+        microUser.secret = baseN(abs(hash(time.time())), 36)  
+      if microUser.twit_user == None:
+        microUser.twit_user = "default"
+      if microUser.full_name == None:
+        microUser.full_name = microUser.nick
       self.response.out.write(template.render('templates/settings.html', locals()))
     else:
       login_url = users.create_login_url('/')
@@ -173,7 +320,10 @@ class SettingsHandler(webapp.RequestHandler):
       logout_url = users.create_logout_url("/")
       microUser = getMicroUser(user)
       nick = self.request.get('nick').strip()
+      full_name = self.request.get('full_name').strip()
       jid = self.request.get('jid').strip()
+      secret = self.request.get('secret').strip()
+      twit_user = self.request.get('twit_user').strip()
       # input validation
       exists = MicroUser.gql('WHERE nick = :1', nick).get()
       if exists and microUser.nick != exists.nick:
@@ -188,10 +338,26 @@ class SettingsHandler(webapp.RequestHandler):
         error = "Nickname may only contain characters a-z and 0-9 (no uppercase) and must start with a-z."
         self.response.out.write(template.render('templates/settings.html', locals()))
         return
-      # TODO: check for valid JID
+      # TODO: check for valid JID, secret etc.
+      elif len(full_name) > 64 or len(full_name) < 4:
+        error = "Full name must be between 4 and 64 characters long."
+        self.response.out.write(template.render('templates/settings.html', locals()))
+        return
+      elif len(secret) > 32 or len(secret) < 6:
+        error = "Secret must be between 6 and 32 characters long."
+        self.response.out.write(template.render('templates/settings.html', locals()))
+        return
+      elif re.match('^[a-zA-Z][a-zA-Z0-9]*$', secret) == None:
+        error = "Secret may only contain characters a-z, A-Z and 0-9 and must start with a letter."
+        self.response.out.write(template.render('templates/settings.html', locals()))
       else: 
         microUser.nick = nick
+        microUser.full_name = full_name
+        if microUser.jid and microUser.jid.address != jid:
+          microUser.validated = False
         microUser.jid = db.IM("xmpp", jid)
+        microUser.secret = secret
+        microUser.twit_user = twit_user
         microUser.put()
         self.redirect('/')  
     else:
@@ -212,18 +378,21 @@ class AboutHandler(webapp.RequestHandler):
 def main():
   webapp.template.register_template_library('templatefilters')
   application = webapp.WSGIApplication([
-    ('/_ah/xmpp/message/chat/', XMPPHandler),
-    ('/',HomeHandler),
-    (r'/(atom|json)',HomeHandler),
-    ('/stream',StreamHandler),
-    (r'/stream/([^/]*)',StreamHandler),
-    ('/items', ItemsHandler),
-    (r'/items/([^/]*)',ItemsHandler),
-    (r'/user/([^/]*)',UserHandler),
-    (r'/user/([^/]*)/(atom|json)',UserHandler),
-    (r'/entry/(.*)',EntryHandler),
-    ('/about',AboutHandler),
-    ('/settings',SettingsHandler)
+    ('/_ah/xmpp/message/chat/',    XMPPHandler),
+    ('/',                          HomeHandler),
+    (r'/(atom|json)',              HomeHandler),
+    ('/stream',                    StreamHandler),
+    (r'/stream/([^/]*)',           StreamHandler),
+    ('/items',                     ItemsHandler),
+    (r'/items/([^/]*)',            ItemsHandler),
+    (r'/user/([^/]*)',             UserHandler),
+    (r'/user/([^/]*)/(atom|json)', UserHandler),
+    (r'/entry/(.*)',               EntryHandler),
+    (r'/comment/(.*)',             CommentHandler),
+    ('/publish',                   PublishHandler),
+    ('/send',                      SendHandler),
+    ('/about',                     AboutHandler),
+    ('/settings',                  SettingsHandler)
   ], debug=True)
   wsgiref.handlers.CGIHandler().run(application)
 

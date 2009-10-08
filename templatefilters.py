@@ -46,9 +46,17 @@ def content(content):
 	content = re.sub(r'(http://[^ ]*)', r'<a href="\1">\1</a>', content)
 	return content
 
+# temporary, until all entries have origin
+def origin(origin):
+  if origin:
+    return origin
+  else:
+    return "web"
+
 register = webapp.template.create_template_register()
 register.filter(timestamp)
 register.filter(entityid)
 register.filter(rfc822datetime)
 register.filter(rfc3339datetime)
 register.filter(content)
+register.filter(origin)

@@ -1,20 +1,21 @@
 {% extends 'sidebar.html' %}
 {% block title %}{{ nick }}'s Posts{% endblock %}
 {% block head %}
-<link rel="alternate" type="application/atom+xml" href="/{{ nick }}/atom" title="reatiwe public timeline atom feed" />
+<link rel="alternate" type="application/atom+xml" href="http://reatiwe.appspot.com/user/{{ nick }}/atom" title="{{ nick }}'s timeline atom feed" />
 <link rel="hub" href="https://pubsubhubbub.appspot.com/" />
 {% endblock %}
 {% block content %}
-  <h2>{{ nick }}'s Posts</h2>
+<h2><img src="http://img.tweetimag.es/i/{{ nickUser.twit_user|escape }}_b" /> {{ nickUser.full_name }} ({{ nick }})</h2>
 
-  <div id="entries">
+<div id="entries">
   <ul>	  
   {% for m in micros %}
-  <li class="lien"><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a>, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span></small></li>	  
+  <li class="lien" style="padding-left: 10px;"><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}</small></li>
   {% endfor %}
   </ul>	  
-  </div>
-  <p>
+</div>
+
+<p>
   {% if page_prev %}
   <a href="/user/{{ nick }}?page={{ page_prev }}">&lt;&lt; Older</a>
   {% endif %}
@@ -22,6 +23,7 @@
   {% if page_next %}
   <a href="/user/{{ nick }}?page={{ page_next }}">Next &gt;&gt;</a>
   {% endif %}
-  </p>
-  <p><a href="/">&laquo; Back to the blog</a></p>
+</p>
+
+<p><a href="/">&laquo; Back to the blog</a></p>
 {% endblock %}

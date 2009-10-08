@@ -1,14 +1,27 @@
 {% extends 'sidebar.html' %}
 {% block title %}Entry {{ entry|entityid }}{% endblock %}
-{% block head %}
-<link rel="alternate" type="application/atom+xml" href="/{{ nick }}/atom" title="reatiwe public timeline atom feed" />
-<link rel="hub" href="https://pubsubhubbub.appspot.com/" />
-{% endblock %}
 {% block content %}
-  <div id="entries">
-    <ul>	
-      <li class="lien"><big><a href="/user/{{ entry.author.nick|escape }}">@{{ entry.author.nick|escape }}</a></big><div>{{ entry.content|escape|content }}</div><small>#{{ entry|entityid }}, <span title="{{ entry.date|rfc3339datetime }}">{{ entry.date|timestamp }} ago</span></small></li>
-    </ul>	    
-  </div>
-  <p><a href="/">&laquo; Back to the blog</a></p>
+{% if user %}
+<p>
+<form action="/comment/{{ entry|entityid }}" method="post">
+     <textarea name="content" rows="3" cols="70"></textarea><br/>
+     <input type="submit" class="submitbutton" value="Comment" />
+  </form>
+</p>
+{% endif %}
+<div id="entries">
+  <ul>	
+    <li class="lien" style="background-image: url(http://img.tweetimag.es/i/{{ entry.author.twit_user|escape }}_n)"><big><a href="/user/{{ entry.author.nick|escape }}">{{ entry.author.full_name|escape }}</a></big><div>{{ entry.content|escape|content }}</div><small>#{{ entry|entityid }} from  {{ entry.origin|origin }}, <span title="{{ entry.date|rfc3339datetime }}">{{ entry.date|timestamp }} ago</span></small></li>
+  </ul>	    
+
+{% if replies %}
+  <h2>Replies ({{ entry.comments }})</h2>
+  <ul>	
+  {% for r in replies %}
+  <li id="{{ r.idx }}" class="lien" style="background-image: url(http://img.tweetimag.es/i/{{ r.author.twit_user|escape }}_m)"><div>{{ r.content|escape|content }}</div><small>#{{ entry|entityid }}/<b>{{ r.idx }}</b> by <a href="/user/{{ r.author.nick|escape }}">{{ r.author.full_name|escape }}</a> from  {{ r.origin|origin }}, <span title="{{ r.date|rfc3339datetime }}">{{ r.date|timestamp }} ago</span></small></li>
+  {% endfor %}	
+  </ul>	    
+</div>	
+{% endif %}
+<p><a href="/">&laquo; Back to the blog</a></p>
 {% endblock %}

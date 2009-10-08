@@ -15,7 +15,7 @@
   <published>{{ m.date|rfc3339datetime }}</published>
   <updated>{{ m.date|rfc3339datetime }}</updated>
   <summary type="text">{{ m.author.nick }}: {{ m.content|escape }}</summary>
-  <author><name>{{ m.author.nick }}</name></author>
+  <author><name>{{ m.author.full_name }} ({{ m.author.nick }})</name></author>
   </entry>
 {% endfor %}
 </feed>

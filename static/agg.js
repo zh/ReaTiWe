@@ -23,10 +23,15 @@ function gotStuff(status, text) {
   } else {
     content += "<ul>\n";	  
     for (var i = 0; i < items.length; ++i) {
-      content += '<li class="lien"><big><a href="/user/' + items[i].author + '">@' + 
-	items[i].author + '</a></big><div>' + items[i].content + '</div><small><a href="' +
-	items[i].id + '">#' + items[i].id + '</a>, <span>' + items[i].date +
-	" ago</span></small></li>\n";
+      content += '<li class="lien" style="background-image: url(http://img.tweetimag.es/i/' + 
+	items[i].avatar + '_n)"><big><a href="/user/' + items[i].author + '">' + 
+	items[i].name + '</a></big><div>' + items[i].content + '</div><small><a href="/entry/' +
+	items[i].id + '">#' + items[i].id + '</a> from ' +  items[i].origin + ', <span>' + 
+	items[i].date + ' ago</span>';
+      if (items[i].replies > 0) {
+        content += '; <a href="/entry/' + items[i].id + '">' + items[i].replies + ' replies</a>';
+      }
+      content += "</small></li>\n";
     }
     content += "</ul>\n";	  
   }

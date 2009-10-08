@@ -1,19 +1,15 @@
 {% extends "base.html" %}
 {% block body %}
-  {% block sidebar %}
-  <div id="sidebar">
-    <div class="section">
-    {{ user.nickname }}
-    </div>	  
-    <div class="section">
-      <ul>
-        <li><a href="mailto:zhesto@gmail.com">GMail</a></li>
-        <li><a href="xmpp:zh@jabber.jp">XMPP (IM)</a></li>
-        <li><a href="http://twitter.com/zh">Twitter</a></li>
-        <li><a href="http://friendfeed.com/zhesto">FriendFeed</a></li>
-      </ul>	  
-    </div>	  
-  </div>
-  {% endblock %}
-  {% block content %}{% endblock %}
+{% block sidebar %}
+<div id="sidebar">
+<div class="headline"><b>{{ microUser.full_name|escape }} ({{ microUser.nick|escape }})</b></div>	    
+<div class="section">
+<ul>
+  <li><a href="http://github.com/zh">GitHub</a></li>
+  <li><a href="http://friendfeed.com/webhooks">FriendFeed</a></li>
+</ul>	  
+</div>	  
+</div>
+{% endblock %}
+{% block content %}{% endblock %}
 {% endblock %}
