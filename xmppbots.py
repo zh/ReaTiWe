@@ -103,7 +103,8 @@ class XMPPHandler(webapp.RequestHandler):
       micros = MicroEntry.all().order('-date').fetch(10)
       micros.reverse()
       for m in micros:
-        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) http://reatiwe.appspot.com/entry/%s\n\n" % (m.author.nick, m.content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), str(entityid(m)))
+        content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
+        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) http://reatiwe.appspot.com/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), str(entityid(m)))
       message.reply(text)
     else:
       # regular expressions, heavy stuff

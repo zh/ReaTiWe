@@ -21,8 +21,21 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 pagelimit = 20
 
+class BaseRequestHandler(webapp.RequestHandler):
+  """Supplies a common header fixing function"""
+  def modified_since(self, timestamp):
+    self.response.headers['Last-Modified'] = timestamp.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    expires = timestamp + timedelta(minutes=5)
+    self.response.headers['Expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    if self.request.headers.has_key('If-Modified-Since'):
+      dt = self.request.headers.get('If-Modified-Since').split(';')[0]
+      modsince = datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
+      if (modsince + timedelta(seconds=1)) >= timestamp:
+        return False  
 
-class HomeHandler(webapp.RequestHandler):
+    return True
+
+class HomeHandler(BaseRequestHandler):
   def get(self, type='html'):
     total = db.GqlQuery('SELECT * FROM MicroEntry').count()
     # pagination
@@ -52,16 +65,9 @@ class HomeHandler(webapp.RequestHandler):
       login_url = users.create_login_url('/')
     if type == 'atom':
       self.response.headers['Content-Type'] = 'application/atom+xml'
-      if self.request.headers.has_key('If-Modified-Since'):
-        dt = self.request.headers.get('If-Modified-Since').split(';')[0]
-        modsince = datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
-        if (modsince + timedelta(seconds=1)) >= latest:
-          self.error(304)
-          return self.response.out.write("304 Not Modified")
-
-      self.response.headers['Last-Modified'] = latest.strftime("%a, %d %b %Y %H:%M:%S GMT")
-      expires=latest + timedelta(minutes=5)
-      self.response.headers['Expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+      if not self.modified_since(latest):
+        self.error(304)
+        return self.response.out.write("304 Not Modified")
     elif type == 'json':
       self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     path = os.path.join('templates/home.' + type)
@@ -87,7 +93,7 @@ class HomeHandler(webapp.RequestHandler):
       self.redirect(login_url) 
 
 
-class UserHandler(webapp.RequestHandler):
+class UserHandler(BaseRequestHandler):
   def get(self, nick, type='html'):
     nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
 
@@ -123,16 +129,11 @@ class UserHandler(webapp.RequestHandler):
       latest = datetime.now()
     if type == 'atom': 
       self.response.headers['Content-Type'] = 'application/atom+xml'
-      if self.request.headers.has_key('If-Modified-Since'):
-        dt = self.request.headers.get('If-Modified-Since').split(';')[0]
-        modsince = datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
-        if (modsince + timedelta(seconds=1)) >= latest:
-          self.error(304)
-          return self.response.out.write("304 Not Modified")
-
-      self.response.headers['Last-Modified'] = latest.strftime("%a, %d %b %Y %H:%M:%S GMT")
-      expires=latest + timedelta(minutes=5)
-      self.response.headers['Expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+      if not self.modified_since(latest):
+        self.error(304)
+        return self.response.out.write("304 Not Modified")
+    elif type == 'json':
+      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     path = os.path.join('templates/user.' + type)
     self.response.out.write(template.render(path, locals()))
 

@@ -166,7 +166,7 @@ class CallbackHandler(webapp.RequestHandler):
           link=link,
           uniq_id=uniq_id,
           author=microUser))
-        xmpp_text += "%s\n\n" % text
+        xmpp_text += "%s\n\n" % text.replace('\n','').replace('\r',' ').replace('\t',' ')
     db.put(update_list)
     if len(update_list) > 0 and not microUser.silent:
       taskqueue.add(url="/send", params={"from":microUser.nick, 
