@@ -27,6 +27,9 @@ handlers:
   script: main.py
   login: admin
 
+- url: /_ah/xmpp/message/chat/
+  script: xmppbots.py
+
 - url: /.*
   script: main.py
 

@@ -21,15 +21,17 @@ The system have two main parts:
  * Microblogging via web or via XMPP (__@me {text}__ command)
  * XMPP messages between ReaTiWe users by nickname (__@nick {text}__ command)
  * Comments on entries via web or via XMPP (__#1234 {text}__ command)
- * __/user/{username}__ URL is a valid 
+ * __/callback/{username}__ URL is a valid 
   [PuSH subscriber](http://pubsubhubbub.appspot.com/subscribe) - used for external feeds
   aggregation
- *  __/user/{username}/atom__ URL is a valid
+ *  __/callback/{username}/atom__ URL is a valid
   [PuSH topic](http://pubsubhubbub.appspot.com/publish) - used by external aggregators
   for getting notifications from ReaTiWe
 
 
 ## Getting started
+
+### Initial registration
 
 Most of the system services are available only after sign in. For that, you need a Google
 account. After the sign in, go to the [Settings](/settings) page and fill your details:
@@ -39,6 +41,8 @@ account. After the sign in, go to the [Settings](/settings) page and fill your d
  * __JID__ - Add  __reatiwe@appspot.com__ to that account's roster
  * __Secret__ - Used for JID validation (__AUTH__ command)
  * __TwitName__ - Used only for the avatars (service provided by http://img.tweetimag.es/ ) 
+
+### Working with the bot
 
 Test the connection with the bot:
 
@@ -67,8 +71,63 @@ Start microblogging, comment on entries, sending messages to other users:
 You can disable messages from other users or announces for new feed entries with 
 __ON__ / __OFF__ commands
 
-When subscribing you user page __/user/{username}__ to some PuSH hub, in the 
-_Verify token:_ box, put the __secret__ from the _Settings_ page.
+### Atom feeds
+
+"Public timeline" Atom feed is on URL 
+[http://reatiwe.appspot.com/atom](http://reatiwe.appspot.com/atom).
+There is also per user Atom feed, available on URL
+__http://reatiwe.appspot.com/user/{username}/atom__
+Both types of feeds have PuSH reference hub URL included:
+
+    <link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+
+### Webhooks and PubSubHubbub (PuSH)
+
+Everytime some user is creating a new entry via web or XMPP, the system will ping
+[PubSubHubbub reference hub](http://pubsubhubbub.appspot.com/) with two topics:
+
+ * Main Atom feed: __http://reatiwe.appspot.com/atom__
+ * Entry author's feed: __http://reatiwe.appspot.com/user/{username}/atom__
+
+If you want some external services to get real-time notifications from ReaTiWe,
+ask them to [subscribe](http://pubsubhubbub.appspot.com/subscribe) to that topics.
+If the external service is not getting your entries, you can try to ping the hub
+from the [PuSH reference hub 'Publish' page](http://pubsubhubbub.appspot.com/publish).
+On the same page, you can check when was the last time, when the hub got your feed.
+
+If you want to aggregate some external Atom feeds with your entries, go to the
+[PuSH reference hub 'Subscribe' page](http://pubsubhubbub.appspot.com/subscribe) and
+fill the form as follows:
+
+  * __Callback:__ -  _http://reatiwe.appspot.com/callback/{your-username}_
+  * __Topic:__ - Atom feed URL you want to subscribe to
+  * __Verify type:__ - your choice
+  * __Verify token__ - the __secret__ from the [Settings](/settings) page
+
+ReaTiWe subscribtion handler is checking for _'hub.challenge'_ , _'hub.topic'_ and 
+'hub.verify\_token' parameters, via a GET request from the PuSH hub, and sending back 
+_'hub.challenge'_ in the response body.
+
+On POST requests, comming from the hub, only the valid Atom entries, which are still
+new for the system (checking atom entries IDs and links) are aggregated.
+  
+    TODO: more easy subscribtion, maybe from the 'Settings' page to have a list of
+    subscribtions
+
+There is also XMPP messages send webhook (__POST__ requests), available on URL:
+[http://reatiwe.appspot.com/send](http://reatiwe.appspot.com/send). You can use it to
+send XMPP messages via web (pure-man BOSH service ;) ) to ReaTiWe users. Needed parameters
+are as follows:
+
+ * __to__ - username, you want to send a message to
+ * __from__ - your username
+ * __secret__ - the __secret__ from the [Settings](/settings) page
+ * __message__ - message text to send
+
+Example code:
+
+    curl -X POST -d"to=other" -d"from=me" -d"secret=secret123" \
+                 -d"message=hello+world" http://reatiwe.appspot.com/send
 
 ## Available XMPP commands
 

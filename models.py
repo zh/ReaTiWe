@@ -13,6 +13,38 @@ from google.appengine.ext import db
 def baseN(num,b,numerals="0123456789abcdefghijklmnopqrstuvwxyz"):
   return ((num == 0) and  "0" ) or (baseN(num // b, b).lstrip("0") + numerals[num % b])
 
+
+def stripTags(s):
+# this list is neccesarry because chk() would otherwise not know
+# that intag in stripTags() is ment, and not a new intag variable in chk().
+  intag = [False]
+  def chk(c):
+    if intag[0]:
+      intag[0] = (c != '>')
+      return False
+    elif c == '<':
+      intag[0] = True
+      return False
+    return True
+  return ''.join(c for c in s if chk(c))
+
+
+def isValidNick(nick):
+  if len(nick) > 32 or len(nick) < 4:
+    raise ReatiweError("Nickname must be between 4 and 32 characters long.")
+  if re.match('^[a-z][a-z0-9]*$', nick) == None:
+    raise ReatiweError("Nickname may only contain chars a-z and 0-9 (no uppercase) and must start with a-z.")
+  return True
+
+
+def isValidSecret(secret):
+  if len(secret) > 32 or len(secret) < 6:
+    raise ReatiweError("Secret must be between 6 and 32 characters long.")
+  if re.match('^[a-zA-Z][a-zA-Z0-9]*$', secret) == None:
+    raise ReatiweError("Secret may only contain characters a-z, A-Z and 0-9 and must start with a letter.")
+  return True
+
+
 class ReatiweError(Exception):
   def __init__(self, value):
     self.value = value

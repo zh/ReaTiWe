@@ -7,10 +7,11 @@ from google.appengine.api import memcache
 from google.appengine.api import xmpp
 from google.appengine.ext import db
 from google.appengine.ext import webapp
-from google.appengine.api.labs import taskqueue
+from google.appengine.ext.webapp import template
 
 from templatefilters import *
 from models import *
+from webhooks import *
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -35,29 +36,6 @@ last - show last 10 entries
 
 See also: http://reatiwe.appspot.com/help
 """
-
-class SendHandler(webapp.RequestHandler):
-  def post(self):
-    try:
-      from_nick = self.request.POST['from']
-      to_nick = self.request.POST['to']
-      fromUser = MicroUser.gql('WHERE nick = :1', from_nick).get()
-      toUser = MicroUser.gql('WHERE nick = :1', to_nick).get()
-      if not fromUser or not toUser:
-        raise ReatiweError("User does not exists.")
-      
-      secret = self.request.POST['secret']
-      if fromUser.secret != secret:
-        raise ReatiweError("Not authorized")
-
-      message = self.request.POST['message']
-      if not message or message == "":
-        raise ReatiweError("Empty message")
-
-      xmpp.send_message(toUser.jid.address, "message from @%s:\n%s" % (from_nick, message))
-    except Exception, e:
-      logging.error('problem: %s' % repr(e))
-      pass
 
 
 class XMPPHandler(webapp.RequestHandler):
@@ -110,15 +88,15 @@ class XMPPHandler(webapp.RequestHandler):
       if len(message.body) > 6:
         nick = message.body[5:].strip()
         exists = MicroUser.gql('WHERE nick = :1', nick).get()
-        if exists and microUser.nick != exists.nick:
-          message.reply("Error: Nickname not available.")
-        elif len(nick) > 32 or len(nick) < 4:
-          message.reply("Error: Nickname must be between 4 and 32 characters long.")
-        elif re.match('^[a-z][a-z0-9]*$', nick) == None:
-          message.reply("Error: Nickname may only contain characters a-z and 0-9 (no uppercase) and must start with a-z.")
-        else:
-          microUser.nick = nick
-          microUser.put()
+        try:
+          if exists and microUser.nick != exists.nick:
+            raise ReatiweError(" Nickname not available.")
+          elif isValidNick(nick):
+            microUser.nick = nick
+            microUser.put()
+        except Exception, e:
+          pass
+          message.reply(str(e))
       message.reply("nickname: %s" % microUser.nick)
     elif msg[0].lower() == u"last":
       text = "Last messages:\n"
@@ -185,3 +163,14 @@ class XMPPHandler(webapp.RequestHandler):
       else:  
         logging.debug("unknown msg: %s" % str(self.request.get('stanza')))
         message.reply("Error: not implemented.")
+
+
+def main():
+  webapp.template.register_template_library('templatefilters')
+  application = webapp.WSGIApplication([
+    ('/_ah/xmpp/message/chat/',    XMPPHandler),
+  ], debug=True)
+  wsgiref.handlers.CGIHandler().run(application)
+
+if __name__ == "__main__":
+  main()
