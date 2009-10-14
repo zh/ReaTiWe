@@ -188,6 +188,7 @@ class SettingsHandler(webapp.RequestHandler):
         microUser.twit_user = "default"
       if microUser.full_name == None:
         microUser.full_name = microUser.nick
+      topics = MicroTopic.all().filter('user =', microUser)  
       self.response.out.write(template.render('templates/settings.html', locals()))
     else:
       login_url = users.create_login_url('/')
@@ -270,7 +271,9 @@ def main():
     (r'/stream/([^/]*)',           StreamHandler),
     ('/items',                     ItemsHandler),
     (r'/items/([^/]*)',            ItemsHandler),
+    ('/topic',                     TopicHandler),
     ('/publish',                   PublishHandler),
+    ('/subscribe',                 SubscribeHandler),
     ('/send',                      SendHandler),
     ('/about',                     AboutHandler),
     ('/help',                      HelpHandler),

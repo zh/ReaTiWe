@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
-import functools
-import os
+import functools, os, re, time, random, string, urlparse, unicodedata
 import os.path
-import re
-import time
-import random
-import unicodedata
 
 from google.appengine.api import users
 from google.appengine.ext import db
@@ -37,12 +32,28 @@ def isValidNick(nick):
   return True
 
 
+def isValidOrigin(origin):
+  if len(origin) > 32 or len(origin) < 4:
+    raise ReatiweError("Origin must be between 4 and 32 characters long.")
+  if re.match('^[a-zA-Z][a-zA-Z0-9_]*$', origin) == None:
+    raise ReatiweError("Origin may only contain chars, digits and _ and must start with a char.")
+  return True
+
+
 def isValidSecret(secret):
   if len(secret) > 32 or len(secret) < 6:
     raise ReatiweError("Secret must be between 6 and 32 characters long.")
   if re.match('^[a-zA-Z][a-zA-Z0-9]*$', secret) == None:
-    raise ReatiweError("Secret may only contain characters a-z, A-Z and 0-9 and must start with a letter.")
+    raise ReatiweError("Secret may only contain chars and digits and must start with a char.")
   return True
+
+
+def isValidURL(url):
+  pieces = urlparse.urlparse(url)
+  if all([pieces.scheme, pieces.netloc]) and set(pieces.netloc) <= set(string.letters + string.digits + '-.:') and pieces.scheme in ['http', 'https', 'ftp']:
+    return True
+  else:
+    raise ReatiweError("Invalid URL")
 
 
 class ReatiweError(Exception):
@@ -63,15 +74,43 @@ class MicroUser(db.Model):
   silent = db.BooleanProperty(default=False)
   validated = db.BooleanProperty(default=False)
 
+  def __init__(self, *args, **kwargs):
+    kwargs['secret'] = kwargs.get('secret', baseN(abs(hash(time.time())), 36))
+    super(MicroUser, self).__init__(*args, **kwargs)
+
+  def __str__(self):
+    return self.nick
+
+
+class MicroTopic(db.Model):
+  user     = db.Reference(MicroUser, collection_name='topics')
+  name     = db.StringProperty(required=True)
+  url      = db.StringProperty(required=True)
+  origin   = db.StringProperty(default="feed")
+  validated = db.BooleanProperty(default=False)
+  created  = db.DateTimeProperty(auto_now_add=True)
+  updated  = db.DateTimeProperty(auto_now=True)
+
+  def __init__(self, *args, **kwargs):
+    kwargs['name'] = kwargs.get('name', baseN(abs(hash(time.time())), 36))
+    super(MicroTopic, self).__init__(*args, **kwargs)
+
+  def __str__(self):
+    return self.name
+
 
 class MicroEntry(db.Model):
   author  = db.Reference(MicroUser, collection_name='micros')
-  content = db.TextProperty()
+  content = db.TextProperty(required=True)
   date    = db.DateTimeProperty(auto_now_add=True)
+  topic   = db.Reference(MicroTopic, collection_name='topics')
   link    = db.StringProperty()   # link if entry come from some feed
   uniq_id = db.StringProperty()   # uniq key
   origin  = db.StringProperty(default="web")    # web, xmpp etc.
   comments = db.IntegerProperty(default=0)
+
+  def __str__(self):
+    return self.content
 
 
 class Comment(db.Model):
@@ -79,8 +118,11 @@ class Comment(db.Model):
   entry   = db.Reference(MicroEntry, collection_name='replies')
   author  = db.Reference(MicroUser, collection_name='comments')
   date    = db.DateTimeProperty(auto_now_add=True)
-  content = db.TextProperty()
+  content = db.TextProperty(required=True)
   origin  = db.StringProperty(default="web")    # web, xmpp etc.
+
+  def __str__(self):
+    return self.content
 
 
 def addCommentEntry(entry, comment):
@@ -101,6 +143,5 @@ def getMicroUser(user):
       nick += str(random.randint(1000, 9999))
     microUser = MicroUser(user=user, nick=nick, full_name=nick)
     microUser.jid = db.IM("xmpp", user.email())
-    microUser.secret = baseN(abs(hash(time.time())), 36)
     microUser.put()
   return microUser

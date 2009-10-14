@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import cgi, os, random, re, wsgiref.handlers, urllib, base64
+import cgi, os, random, re, wsgiref.handlers, urllib, urllib2, base64
 import logging, hashlib, feedparser, markdown
 
 from urlparse import urlparse
@@ -21,6 +21,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 pagelimit = 20
 
+# Allow 'abc' and 'abc.def' but not '.abc' or 'abc.'
+valid_callback = re.compile('^\w+(\.\w+)*$')
 
 class PublishHandler(webapp.RequestHandler):
   def post(self):
@@ -38,13 +40,86 @@ class PublishHandler(webapp.RequestHandler):
                      headers = {'Content-Type': 'application/x-www-form-urlencoded'})
       form_fields = { "hub.mode": "publish",
                       "hub.url": "http://reatiwe.appspot.com/user/%s/atom" % nick }
-      urlfetch.fetch(url = self.request.POST['hub'],
-                     payload = urllib.urlencode(form_fields),
-                     method = urlfetch.POST,
-                     headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+      result = 200
+      urllib2.urlopen(self.request.POST['hub'], urllib.urlencode(form_fields))
+    except urllib2.HTTPError, e:
+      result = e.code
+      if result < 200 or result >= 300:
+        logging.error('urllib2 problem: %s' % repr(e))
+        pass
     except Exception, e:
       logging.error('problem: %s' % repr(e))
       pass
+
+
+# TODO: hub URL autodiscovery
+class SubscribeHandler(webapp.RequestHandler):
+  def post(self):
+    try:
+      name = self.request.POST['name']
+      topic = MicroTopic.all().filter('name =', name).get()
+      if not topic:
+        raise ReatiweError("Topic %s does not exists." % name)
+      if self.request.POST['mode']:
+        mode = self.request.POST['mode']
+      else:
+        mode = "subscribe"
+      form_fields = { "hub.mode": mode,
+                      "hub.callback": "http://reatiwe.appspot.com/callback/%s" % topic.name,
+                      "hub.topic": topic.url,
+                      "hub.verify": "sync",
+                      "hub.verify_token": topic.name }
+      result = 200
+      urllib2.urlopen(self.request.POST['hub'], urllib.urlencode(form_fields))
+    except urllib2.HTTPError, e:
+      result = e.code
+      if result < 200 or result >= 300:
+        logging.error('urllib2 problem: %s' % repr(e))
+        pass
+      else:
+        topic.validated = True
+        topic.put()
+    except Exception, e:
+      logging.error('problem: %s' % repr(e))
+      pass
+
+
+class TopicHandler(webapp.RequestHandler):
+  def post(self):
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
+      if self.request.POST.get('t_name', None):
+        t = MicroTopic.all().filter('name =', self.request.POST['t_name']).get()
+        if t:
+          name = t.name
+          q = db.GqlQuery("SELECT * FROM MicroEntry where topic = :1", t)
+          db.delete(q)
+          t.delete()
+          taskqueue.add(url="/subscribe",
+                        params={"name": name,
+                                "mode": "unsubscribe",
+                                "hub": "https://pubsubhubbub.appspot.com/"})
+      else:
+        try:
+          url = self.request.POST['t_url']
+          origin = self.request.POST['t_origin']
+          if isValidURL(url) and isValidOrigin(origin):
+            t = MicroTopic(user=microUser, url=url, origin=origin)
+            t.put()
+            taskqueue.add(url="/subscribe",
+                          params={"name":t.name,
+                                  "mode":"subscribe",
+                                  "hub":"https://pubsubhubbub.appspot.com/"})
+        except Exception, e:
+          pass
+          error = str(e)
+          return self.response.out.write(template.render('templates/settings.html', locals()))
+      return self.redirect('/settings')
+    else:
+      login_url = users.create_login_url('/')
+      self.redirect(login_url)
 
 
 class SendHandler(webapp.RequestHandler):
@@ -73,6 +148,7 @@ class SendHandler(webapp.RequestHandler):
 
 class ItemsHandler(webapp.RequestHandler):
   def get(self, nick='all'):
+    callback = self.request.get('callback', default_value='')
     encoder = simplejson.JSONEncoder()
     stuff = []
     microUser = MicroUser.gql("WHERE nick = :1", nick).get()
@@ -89,7 +165,10 @@ class ItemsHandler(webapp.RequestHandler):
                     'avatar': micro.author.twit_user,
                     'replies': micro.comments,
                     'content': content(micro.content)})
-    self.response.out.write(encoder.encode(stuff))
+    data = encoder.encode(stuff)  
+    if callback and valid_callback.match(callback):
+      data = "%s(%s)" % (self.request.get("callback"), data) 
+    self.response.out.write(data)
 
 
 class StreamHandler(webapp.RequestHandler):
@@ -107,23 +186,22 @@ class StreamHandler(webapp.RequestHandler):
 
 
 class CallbackHandler(webapp.RequestHandler):
-  def get(self, nick):
+  def get(self, name):
     challenge = self.request.get('hub.challenge')
     topic = self.request.get('hub.topic')
-    vtoken = self.request.get('hub.verify_token')
 
-    if challenge and topic and vtoken:
-      microUser = MicroUser.gql("WHERE nick = :1", nick).get()
-      if microUser and vtoken == microUser.secret:
+    if challenge and topic:
+      topic = MicroTopic.all().filter('name =', name).get()
+      if topic:
         self.response.set_status(200)
         return self.response.out.write(challenge)
     self.response.set_status(400)
     return self.response.out.write("Bad request")
   # PuSH subscriber  
-  def post(self, nick):
+  def post(self, name):
     # handle only requests from the PuSH reference hub
-    microUser = MicroUser.gql("WHERE nick = :1", nick).get()
-    if not microUser:
+    topic = MicroTopic.all().filter('name =', name).get()
+    if not topic:
       self.response.set_status(400)
       return self.response.out.write("Bad request")
 
@@ -134,7 +212,11 @@ class CallbackHandler(webapp.RequestHandler):
       return self.response.out.write("Bad request: Invalid Atom feed")
     
     update_list = []
-    xmpp_text = "New entries: \n\n"
+    if topic.origin:
+      origin = topic.origin
+    else:
+      origin = "feed"
+    xmpp_text = "New entries in '%s': \n\n" % origin
     logging.info('Found %d entries', len(data.entries))
     for entry in data.entries:
       if hasattr(entry, 'content'):
@@ -162,17 +244,18 @@ class CallbackHandler(webapp.RequestHandler):
         update_list.append(MicroEntry(
           title=title,
           content=text,
-          origin="feed",
+          origin=origin,
           link=link,
           uniq_id=uniq_id,
-          author=microUser))
+          topic=topic,
+          author=topic.user))
         xmpp_text += "%s\n\n" % text.replace('\n','').replace('\r',' ').replace('\t',' ')
     db.put(update_list)
-    if len(update_list) > 0 and not microUser.silent:
-      taskqueue.add(url="/send", params={"from":microUser.nick, 
-                                         "to":microUser.nick, 
+    if len(update_list) > 0 and not topic.user.silent:
+      taskqueue.add(url="/send", params={"from":topic.user.nick, 
+                                         "to":topic.user.nick, 
                                          "message":xmpp_text, 
-                                         "secret":microUser.secret})
+                                         "secret":topic.user.secret})
     # TODO: maybe also send xmpp message. to who?
     self.response.set_status(200)
     return self.response.out.write("OK")

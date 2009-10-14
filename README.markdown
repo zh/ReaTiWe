@@ -21,8 +21,8 @@ The system have two main parts:
  * Microblogging via web or via XMPP (__@me {text}__ command)
  * XMPP messages between ReaTiWe users by nickname (__@nick {text}__ command)
  * Comments on entries via web or via XMPP (__#1234 {text}__ command)
- * __/callback/{username}__ URL is a valid 
-  [PuSH subscriber](http://pubsubhubbub.appspot.com/subscribe) - used for external feeds
+ * A lot of __/callback/{some_secret}__ valid 
+  [PuSH subscribers](http://pubsubhubbub.appspot.com/subscribe) - used for external feeds
   aggregation
  *  __/callback/{username}/atom__ URL is a valid
   [PuSH topic](http://pubsubhubbub.appspot.com/publish) - used by external aggregators
@@ -40,7 +40,8 @@ account. After the sign in, go to the [Settings](/settings) page and fill your d
  * __Full name__ - Visible via web on all your entries.
  * __JID__ - Add  __reatiwe@appspot.com__ to that account's roster
  * __Secret__ - Used for JID validation (__AUTH__ command)
- * __TwitName__ - Used only for the avatars (service provided by http://img.tweetimag.es/ ) 
+ * __TwitName__ - Used only for the avatars (service provided by http://img.tweetimag.es/ )
+ * __Subscriptions__ - list of topics, you are subscribed to. See below (PuSH section) for details.
 
 ### Working with the bot
 
@@ -96,25 +97,26 @@ from the [PuSH reference hub 'Publish' page](http://pubsubhubbub.appspot.com/pub
 On the same page, you can check when was the last time, when the hub got your feed.
 
 If you want to aggregate some external Atom feeds with your entries, go to the
-[PuSH reference hub 'Subscribe' page](http://pubsubhubbub.appspot.com/subscribe) and
-fill the form as follows:
+[Settings](/settings) page and enter the _topic URL_ and (optional) the _origin_ (some
+string, you want to see in the _'from ...'_ part of the entries).
+The system will send subscribtion request to the 
+[PuSH reference hub](http://pubsubhubbub.appspot.com/): _"hub.mode"="subscribe"_,
+_"hub.callback"="http://reatiwe.appspot.com/callback/{some_secret}"_
 
-  * __Callback:__ -  _http://reatiwe.appspot.com/callback/{your-username}_
-  * __Topic:__ - Atom feed URL you want to subscribe to
-  * __Verify type:__ - your choice
-  * __Verify token__ - the __secret__ from the [Settings](/settings) page
-
-ReaTiWe subscribtion handler is checking for _'hub.challenge'_ , _'hub.topic'_ and 
-'hub.verify\_token' parameters, via a GET request from the PuSH hub, and sending back 
-_'hub.challenge'_ in the response body.
+ReaTiWe subscribtion handler is checking for _'hub.challenge'_  and  _'hub.topic'_
+parameters, via a GET request from the PuSH hub, and sending back _'hub.challenge'_ 
+in the response body.
 
 On POST requests, comming from the hub, only the valid Atom entries, which are still
 new for the system (checking atom entries IDs and links) are aggregated.
-  
-    TODO: more easy subscribtion, maybe from the 'Settings' page to have a list of
-    subscribtions
 
-There is also XMPP messages send webhook (__POST__ requests), available on URL:
+You can also subscribe/unsubscribe from the XMPP bot (commands follows):
+
+    list (show all your subscriptions)
+    sub http://somefeed.example.com/feed SomeFeed  (origin='SomeFeed')
+    unsub Xx12eW  (unsubscribe from topic with name=Xx12eW)
+  
+There is also an XMPP messages send webhook (__POST__ requests), available on URL:
 [http://reatiwe.appspot.com/send](http://reatiwe.appspot.com/send). You can use it to
 send XMPP messages via web (pure-man BOSH service ;) ) to ReaTiWe users. Needed parameters
 are as follows:
@@ -156,10 +158,15 @@ when you first login to the system. From your XMPP client send
  * __last__ - show last 10 entries
  * __#1234__ - show some entry and comments to it, 1234 is an entry ID
  * __#1234 {text}__ - comment on some entry, 1234 is an entry ID
+ * __list__ - list all topic subscriptions
+ * __sub {url} [alias]__ - subscribe to some topic (Atom feed) (alias is optional, default="feed")
+ * __unsub {name}__ - unsubscribe from some topic
 
 ## Use cases
 
  * Simple microblog with web and XMPP input
  * PuSH publisher
  * Push subscriber
+ * [Web-to-XMPP gateway](http://bloggitation.appspot.com/entry/using-reatiwe-like-a-web-to-xmpp-gateway)
+ * [PuSH-to-XMPP gateway](http://bloggitation.appspot.com/entry/using-reatiwe-like-a-push-to-xmpp-gateway)
  * SocNode (TODO, still missing _/friends/{user}_ feed)

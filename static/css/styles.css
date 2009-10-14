@@ -32,6 +32,33 @@ td {
   padding: 0;
 }
 
+table.subs {
+  width: 100%;
+  background-color: #666;
+  border: 0px;
+  border-collapse: collapse;
+  border-spacing: 0px;
+  margin-right: 200px;
+}
+
+table.subs td {
+  background-color: #ccc;
+  color: #000;
+  padding: 4px;
+  text-align: left;
+  border: 1px #fff solid;
+}
+
+table.subs td.int { text-align: center;}
+
+table.subs th {
+  background-color: #000;
+  color: #fff;
+  padding: 4px;
+  text-align: center;
+  border-bottom: 2px #fff solid;
+}
+
 img {
   border: 0;
 }
@@ -124,6 +151,10 @@ a:hover {
 }
 
 #help {
+  margin-right: 200px;
+}
+
+#subs {
   margin-right: 200px;
 }
 

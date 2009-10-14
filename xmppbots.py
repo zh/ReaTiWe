@@ -34,6 +34,10 @@ last - show last 10 entries
 #1234 - show some entry and comments to it
 #1234 {text} - comment on some entry
 
+list - list all subscriptions
+sub {url} [alias] - subscribe to some topic (Atom feed)
+unsub {name} - unsubscribe from some topic
+
 See also: http://reatiwe.appspot.com/help
 """
 
@@ -106,6 +110,57 @@ class XMPPHandler(webapp.RequestHandler):
         content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
         text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) http://reatiwe.appspot.com/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), str(entityid(m)))
       message.reply(text)
+    elif msg[0].lower() == u"list":
+      topics = db.GqlQuery("SELECT * FROM MicroTopic where user = :1", microUser)
+      if topics.count() > 0:
+        text = "Your subscriptions:\n"
+        for t in topics:
+          text += "%s: %s" % (t.name, t.url)
+          if t.validated:
+            text += " (valid)"
+          text += "\n"  
+        message.reply(text)
+      else:
+        message.reply("No subscriptions")
+    elif msg[0].lower() == u"sub":
+      url = ""
+      t_origin = "feed"
+      if len(msg) > 1:
+        t_url = msg[1]
+      if len(msg) > 2:
+        t_origin = msg[2]
+      try:
+        if isValidURL(t_url) and isValidOrigin(t_origin):
+          exists = MicroTopic.gql('WHERE url = :1', t_url).get()
+          if exists:
+            raise ReatiweError("Already subscribed to %s - %s" % (t_url, exists.name))
+          t = MicroTopic(user=microUser, url=t_url, origin=t_origin)
+          t.put()
+          taskqueue.add(url="/subscribe",
+                        params={"name":t.name,
+                                "mode":"subscribe",
+                                "hub":"https://pubsubhubbub.appspot.com/"})
+          message.reply("Subscribed %s: %s (%s)" % (t.name, t_url, t_origin))
+      except Exception, e:
+        pass
+        message.reply(str(e))
+    elif msg[0].lower() == u"unsub":
+      topic = MicroTopic.all().filter('name =', msg[1]).get()
+      if not topic:
+        message.reply("Error: not authorized")
+        return
+      name = topic.name
+      url = topic.url
+      q = db.GqlQuery("SELECT * FROM MicroEntry where topic = :1", topic)
+      if q.count() > 0:
+        results = q.fetch(q.count())
+        db.delete(results)
+      topic.delete()
+      taskqueue.add(url="/subscribe",
+                    params={"name": name,
+                            "mode": "unsubscribe",
+                            "hub": "https://pubsubhubbub.appspot.com/"})
+      message.reply("Unsubscribed from %s" % url)
     else:
       # regular expressions, heavy stuff
       pattern = re.compile('^@([a-z][a-z0-9]*)\s*(.*)')
