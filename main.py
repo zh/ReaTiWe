@@ -21,8 +21,9 @@ from xmppbots import *
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+
 class BaseRequestHandler(webapp.RequestHandler):
-  """Supplies a common header fixing function"""
+  """Supplies common handlers functions"""
   def modified_since(self, timestamp):
     self.response.headers['Last-Modified'] = timestamp.strftime("%a, %d %b %Y %H:%M:%S GMT")
     expires = timestamp + timedelta(minutes=5)
@@ -32,13 +33,39 @@ class BaseRequestHandler(webapp.RequestHandler):
       modsince = datetime.strptime(dt, "%a, %d %b %Y %H:%M:%S %Z")
       if (modsince + timedelta(seconds=1)) >= timestamp:
         return False  
-
     return True
+
+  # Collection is db.Model 
+  def show(self, collection, template_name='', vars={}, type='html'):
+    if type == 'atom': 
+      self.response.headers['Content-Type'] = 'application/atom+xml'
+      if vars['latest'] and not self.modified_since(vars['latest']):
+        self.error(304)
+        return self.response.out.write("304 Not Modified")
+    elif type == 'json':
+      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
+    path = os.path.join("templates/%s.%s" % (template_name, type))
+    hub_url = settings.HUB_URL
+    pushub_url = settings.PUSHUB_URL
+    site_url = settings.SITE_URL
+    site_name = settings.SITE_NAME
+    param = vars.copy() 
+    param.update(locals())
+    return self.response.out.write(template.render(path, param))
+
 
 class HomeHandler(BaseRequestHandler):
   def get(self, type='html'):
-    total = db.GqlQuery('SELECT * FROM MicroEntry').count()
+    # authentication
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
+    else:
+      login_url = users.create_login_url('/')
+
     # pagination
+    total = db.GqlQuery('SELECT * FROM MicroEntry').count()
     page = self.request.get('page')
     if page:
       page = int(page)
@@ -52,29 +79,11 @@ class HomeHandler(BaseRequestHandler):
     num_pages = int(total/settings.PAGELIMIT)
     if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
       num_pages = num_pages + 1
-    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT))  
+    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT))
+    latest = datetime.now()
     if micros.count() > 0:
       latest = micros[0].date
-    else:
-      latest = datetime.now()
-    user = users.get_current_user()
-    if user:
-      logout_url = users.create_logout_url("/")
-      microUser = getMicroUser(user)
-    else:
-      login_url = users.create_login_url('/')
-    if type == 'atom':
-      self.response.headers['Content-Type'] = 'application/atom+xml'
-      if not self.modified_since(latest):
-        self.error(304)
-        return self.response.out.write("304 Not Modified")
-    elif type == 'json':
-      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
-    path = os.path.join('templates/home.' + type)
-    hub_url = settings.HUB_URL
-    pushub_url = settings.PUSHUB_URL
-    site_url = settings.SITE_URL
-    self.response.out.write(template.render(path, locals()))
+    return self.show(micros, "home", locals(), type)  
                                                       
   def post(self):
     user = users.get_current_user()
@@ -102,6 +111,7 @@ class UserHandler(BaseRequestHandler):
   def get(self, nick, type='html'):
     nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
 
+    # authentication
     user = users.get_current_user()
     if user:
       logout_url = users.create_logout_url("/")
@@ -112,8 +122,8 @@ class UserHandler(BaseRequestHandler):
       self.redirect('/')
       return
     
-    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', nickUser).count()
     # pagination
+    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', nickUser).count()
     page = self.request.get('page')
     if page:
       page = int(page)
@@ -127,23 +137,37 @@ class UserHandler(BaseRequestHandler):
     num_pages = int(total/settings.PAGELIMIT)
     if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
       num_pages = num_pages + 1
+    
     micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT), nickUser)
+    latest = datetime.now()
     if micros.count() > 0:
       latest = micros[0].date
+    e_count = nickUser.micros.count()  
+    c_count = nickUser.comments.count()  
+    l_count = nickUser.likes.count()  
+    return self.show(micros, "user", locals(), type)  
+
+
+class LikesHandler(BaseRequestHandler):
+  def get(self, nick, type='html'):
+    nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
+    
+    # authentication
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
     else:
-      latest = datetime.now()
-    if type == 'atom': 
-      self.response.headers['Content-Type'] = 'application/atom+xml'
-      if not self.modified_since(latest):
-        self.error(304)
-        return self.response.out.write("304 Not Modified")
-    elif type == 'json':
-      self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
-    path = os.path.join('templates/user.' + type)
-    hub_url = settings.HUB_URL
-    pushub_url = settings.PUSHUB_URL
-    site_url = settings.SITE_URL
-    self.response.out.write(template.render(path, locals()))
+      login_url = users.create_login_url('/')
+    if not nickUser:
+      self.redirect('/')
+      return
+    likes = nickUser.likes.order('-date')
+    
+    latest = datetime.now()
+    if likes.count() > 0:
+      latest = likes[0].date
+    return self.show(likes, "likes", locals(), type)  
 
 
 class EntryHandler(webapp.RequestHandler):
@@ -208,7 +232,7 @@ class SettingsHandler(webapp.RequestHandler):
         microUser.full_name = microUser.nick
       topics = MicroTopic.all().filter('user =', microUser)  
       hub_url = settings.HUB_URL
-      self.response.out.write(template.render('templates/settings.html', locals()))
+      return self.response.out.write(template.render('templates/settings.html', locals()))
     else:
       login_url = users.create_login_url('/')
       self.redirect(login_url) 
@@ -259,7 +283,7 @@ class AboutHandler(webapp.RequestHandler):
     else:
       login_url = users.create_login_url('/about')
     memcache.delete("reatiwe_help")  
-    self.response.out.write(template.render('templates/about.html', locals()))
+    return self.response.out.write(template.render('templates/about.html', locals()))
 
 
 class HelpHandler(webapp.RequestHandler):
@@ -274,7 +298,7 @@ class HelpHandler(webapp.RequestHandler):
     if not help_text:
       help_text = markdown.markdown_path("README.markdown")
       memcache.add("reatiwe_help", help_text, 600)
-    self.response.out.write(template.render('templates/help.html', locals()))
+    return self.response.out.write(template.render('templates/help.html', locals()))
 
 
 def main():
@@ -284,6 +308,8 @@ def main():
     (r'/(atom|json)',              HomeHandler),
     (r'/user/([^/]*)',             UserHandler),
     (r'/user/([^/]*)/(atom|json)', UserHandler),
+    (r'/likes/([^/]*)',            LikesHandler),
+    (r'/likes/([^/]*)/(atom|json)', LikesHandler),
     (r'/callback/([^/]*)',         CallbackHandler),
     (r'/entry/(.*)',               EntryHandler),
     (r'/comment/(.*)',             CommentHandler),

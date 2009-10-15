@@ -1,4 +1,5 @@
-SITE_URL = u"http://reatiwe.appspot.com"
-HUB_URL = u"https://pubsubhubbub.appspot.com/"
-PAGELIMIT = 20
-DEBUG = False
+SITE_NAME  = u"ReaTiWe"
+SITE_URL   = u"http://reatiwe.appspot.com"
+HUB_URL    = u"https://pubsubhubbub.appspot.com/"
+PAGELIMIT  = 20
+DEBUG      = False

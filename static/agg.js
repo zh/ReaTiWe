@@ -29,12 +29,13 @@ function gotStuff(status, text) {
 	items[i].id + '">#' + items[i].id + '</a> from ' +  items[i].origin + ', <span>' + 
 	items[i].date + ' ago</span>';
       if (items[i].replies > 0) {
-        content += '; <a href="/entry/' + items[i].id + '">' + items[i].replies + ' replies</a>';
+        content += '; <a class="reply" href="/entry/' + items[i].id + '">' + 
+          items[i].replies + ' replies</a>';
       }
       if (items[i].likes > 0) {
-        content += ', <img src="/images/smile.png" />' + items[i].likes + ' likes</a>';
+        content += ', <span class="like">' + items[i].likes + ' likes</span>';
       }
-      content += "</small></li>\n";
+      content += "</small>.</li>\n";
     }
     content += "</ul>\n";	  
   }

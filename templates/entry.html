@@ -15,7 +15,7 @@
   </ul>	    
 
 {% if replies %}
-  <h2>Replies ({{ entry.comments }})</h2>
+  <h2 class="reply">Replies ({{ entry.comments }})</h2>
   <ul>	
   {% for r in replies %}
   <li id="{{ r.idx }}" class="lien" style="background-image: url(http://img.tweetimag.es/i/{{ r.author.twit_user|escape }}_m)"><div>{{ r.content|escape|content }}</div><small>#{{ entry|entityid }}/<b>{{ r.idx }}</b> by <a href="/user/{{ r.author.nick|escape }}">{{ r.author.full_name|escape }}</a> from  {{ r.origin|origin }}, <span title="{{ r.date|rfc3339datetime }}">{{ r.date|timestamp }} ago</span></small></li>
@@ -26,7 +26,7 @@
 {% if likes %}
 <p>
 <br/>
-<img src="/images/smile.png" /><b>Likes ({{ entry.likes }}): </b>
+<b><span class="like">Likes ({{ entry.likes }}): </span></b>
 {% for l in likes %}
 <a href="/user/{{ l.author.nick|escape }}">{{ l.author.full_name|escape }}</a>,&nbsp;
 {% endfor %}	

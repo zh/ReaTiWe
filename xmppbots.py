@@ -136,7 +136,7 @@ class XMPPHandler(webapp.RequestHandler):
     ### --------------------------------------------------------
     elif msg[0].lower() == u"like":
       if len(msg) > 1:
-        text = "@%s likes " % microUser.nick
+        text = "@%s liked " % microUser.nick
         epattern = re.compile('^#([0-9]*)$')
         em = epattern.match(msg[1])
         if em and em.group(1):
@@ -151,6 +151,12 @@ class XMPPHandler(webapp.RequestHandler):
             else:  
               addLikeEntry(entry, Like(author=microUser))
               text += "entry #%d" % entryid
+              # send the comment to the entry author
+              if entry.author.validated and not entry.author.silent and microUser.nick != entry.author.nick:
+                taskqueue.add(url="/send", params={"from":microUser.nick,
+                                                   "to":entry.author.nick,
+                                                   "message":text,
+                                                   "secret":microUser.secret})
         else:  
          text += msg[1]
       else:

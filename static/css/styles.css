@@ -12,6 +12,9 @@ textarea {
   font-size: 12pt;
 }
 
+hr { display: none; }
+.br { clear: both; }
+
 h1,
 h2,
 h3,
@@ -178,8 +181,37 @@ a:hover {
   background:#c00;
 }
 
+.reply {
+  background-image: url(/images/comment.png);	
+  background-repeat: no-repeat;
+  padding-left: 17px;
+}	
+
+.like {
+  background-image: url(/images/smile.png);	
+  background-repeat: no-repeat;	
+  padding-left: 17px;
+}	
+
+.feed {
+  background-image: url(/images/rss_small.png);	
+  background-repeat: no-repeat;	
+  padding-left: 18px;
+}	
+
 #entries ul { list-style-type: none; margin: 0; padding: 0.5em 0 0 0; }
 #entries li div { overflow-x: auto; overflow-y: hidden; margin: 4px 0; }
 #entries .lien { padding-left: 58px; background-repeat: no-repeat; }
 #entries small { margin-left: 1em; }
 #entries li { padding-bottom: 0.75em; margin-top: 0.5em; border-bottom: 1px solid #ccc; }
+
+#user { width: 600px; margin: 0 auto; }
+#userinfo { width: 300px; margin: 1.5em 0 1.5em 0; }
+#avatar { width: 96px; height: 96px; overflow: hidden; text-align: center; float: left; margin: 0 1em 1em 1em; }
+#userstatus { float: left; }
+#userinfo h1 { font-size: x-large; margin: 0 0 0.5em 0; }
+#userinfo ul { list-style-type: none; margin: 0 0 0 1em; padding: 0; }
+
+#userlinks { width: 300px; margin: 0 0 1em 400px; border-left: 1px solid #abab7c; padding: 1em 0 1em 15px; }
+#userlinks h2 { font-size: large; margin: 0 0 0.5em 0; }
+#userlinks ul { list-style-type: none; margin: 0 0 0 1em; padding: 0; }
