@@ -36,7 +36,7 @@ last          - show last 10 entries from everybody
 mine          - show your own last 10 entries
 #1234         - show some entry and comments to it
 #1234 {text}  - comment on some entry
-like #1234    - like some entry (TODO)
+like #1234    - like some entry
 
 list          - list all subscriptions
 sub {url} [alias] [hub] - subscribe to some topic (Atom feed)
@@ -83,18 +83,21 @@ class XMPPHandler(webapp.RequestHandler):
     if not microUser.validated:
       message.reply("Error: not authorized")
       return
-    # validated JID    
+    # validated JID
+    ### --------------------------------------------------------
     if msg[0].lower() == u"on":
       microUser.silent = False
       microUser.put()
       message.reply("Messages: ON")
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"off":
       microUser.silent = True
       microUser.put()
       message.reply("Messages: OFF")
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"nick":
-      if len(message.body) > 6:
-        nick = message.body[5:].strip()
+      if len(msg) > 1:
+        nick = msg[1]
         exists = MicroUser.gql('WHERE nick = :1', nick).get()
         try:
           if exists and microUser.nick != exists.nick:
@@ -106,22 +109,54 @@ class XMPPHandler(webapp.RequestHandler):
           pass
           message.reply(str(e))
       message.reply("nickname: %s" % microUser.nick)
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"last":
       text = "Last messages:\n"
       micros = MicroEntry.all().order('-date').fetch(10)
       micros.reverse()
       for m in micros:
         content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
-        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), settings.SITE_URL, str(entityid(m)))
+        text += "@%s:\n%s\n#%s" % (m.author.nick, content, str(entityid(m))) 
+        text += " (%s ago from %s" % (timestamp(m.date), origin(m.origin))
+        text += ", %d replies, %d likes)" % (int(m.comments), int(m.likes))
+        text += " %s/entry/%s\n\n" % (settings.SITE_URL, str(entityid(m)))
       message.reply(text)
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"mine":
       text = "My own last messages:\n"
       micros = MicroEntry.all().filter("author = ", microUser).order('-date').fetch(10)
       micros.reverse()
       for m in micros:
         content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
-        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), settings.SITE_URL, str(entityid(m)))
+        text += "@%s:\n%s\n#%s" % (m.author.nick, content, str(entityid(m))) 
+        text += " (%s ago from %s" % (timestamp(m.date), origin(m.origin))
+        text += ", %d replies, %d likes)" % (int(m.comments), int(m.likes))
+        text += " %s/entry/%s\n\n" % (settings.SITE_URL, str(entityid(m)))
       message.reply(text)
+    ### --------------------------------------------------------
+    elif msg[0].lower() == u"like":
+      if len(msg) > 1:
+        text = "@%s likes " % microUser.nick
+        epattern = re.compile('^#([0-9]*)$')
+        em = epattern.match(msg[1])
+        if em and em.group(1):
+          entryid = int(em.group(1))
+          entry = MicroEntry.get_by_id(entryid)
+          if not entry:
+            text += "non existing entry"
+          else:
+            exists = Like.gql('WHERE author = :1 AND entry = :2', microUser, entry).get()
+            if exists:
+              text += "AGAIN entry #%d" % entryid
+            else:  
+              addLikeEntry(entry, Like(author=microUser))
+              text += "entry #%d" % entryid
+        else:  
+         text += msg[1]
+      else:
+        text = "What you like?"
+      message.reply(text)
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"list":
       topics = db.GqlQuery("SELECT * FROM MicroTopic where user = :1", microUser)
       if topics.count() > 0:
@@ -134,6 +169,7 @@ class XMPPHandler(webapp.RequestHandler):
         message.reply(text)
       else:
         message.reply("No subscriptions")
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"sub":
       url = ""
       t_origin = "feed"
@@ -158,6 +194,7 @@ class XMPPHandler(webapp.RequestHandler):
       except Exception, e:
         pass
         message.reply(str(e))
+    ### --------------------------------------------------------
     elif msg[0].lower() == u"unsub":
       topic = MicroTopic.all().filter('name =', msg[1]).get()
       if not topic:
@@ -172,6 +209,7 @@ class XMPPHandler(webapp.RequestHandler):
       pattern1 = re.compile('^#([0-9]*)\s*(.*)')
       m = pattern.match(message.body)
       m1 = pattern1.match(message.body)
+    ### --------------------------------------------------------
       if m and m.group(2):
         to_nick = m.group(1)
         msg = m.group(2)
@@ -199,6 +237,7 @@ class XMPPHandler(webapp.RequestHandler):
                                                  "message":msg, 
                                                  "secret":microUser.secret})
               message.reply("message to %s sent." % to_nick)
+    ### --------------------------------------------------------
       elif m1 and m1.group(1):
         to_entry = m1.group(1)
         entry = MicroEntry.get_by_id(int(to_entry))
@@ -223,11 +262,17 @@ class XMPPHandler(webapp.RequestHandler):
           else:  # display the entry itself
             text = "@%s:\n%s\n" % (entry.author.nick, entry.content)
             if int(entry.comments) > 0:
-              text += "\nRepiles:\n\n"
+              text += "\nRepiles:\n"
               replies = Comment.all().filter('entry = ', entry).order('idx')
               for r in replies:
-                text += "#%d @%s:\n%s (%s ago from %s)\n\n" % (int(r.idx), r.author.nick, r.content, timestamp(r.date), origin(r.origin))
-            text += "\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (str(entityid(entry)), timestamp(entry.date), origin(entry.origin), int(entry.comments), settings.SITE_URL, str(entityid(entry)))
+                text += "#%d @%s:\n%s " % (int(r.idx), r.author.nick, r.content)
+                text += "(%s ago from %s)\n" % (timestamp(r.date), origin(r.origin))
+            if int(entry.likes) > 0:
+              text += "\nLikes: "
+              for l in entry.impressions:
+                text += "%s, " % l.author.nick
+            text += "\n#%s (%s ago from %s) " % (str(entityid(entry)), timestamp(entry.date), origin(entry.origin)) 
+            text += "%s/entry/%s\n" % (settings.SITE_URL, str(entityid(entry)))
             message.reply(text)
       else:  
         logging.debug("unknown msg: %s" % str(self.request.get('stanza')))

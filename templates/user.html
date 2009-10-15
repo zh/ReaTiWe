@@ -11,7 +11,7 @@
 <div id="entries">
   <ul>	  
   {% for m in micros %}
-  <li class="lien" style="padding-left: 10px;"><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}</small></li>
+  <li class="lien" style="padding-left: 10px;"><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}{% if m.likes %},<img src="/images/smile.png" />{{ m.likes }} likes{% endif %}.</small></li>
   {% endfor %}
   </ul>	  
 </div>

@@ -159,6 +159,7 @@ class EntryHandler(webapp.RequestHandler):
       self.redirect('/')
     else:
       replies = Comment.all().filter('entry = ', entry).order('idx')
+      likes = entry.impressions
       self.response.out.write(template.render('templates/entry.html', locals()))
 
 

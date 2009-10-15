@@ -23,5 +23,15 @@
   </ul>	    
 </div>	
 {% endif %}
+{% if likes %}
+<p>
+<br/>
+<img src="/images/smile.png" /><b>Likes ({{ entry.likes }}): </b>
+{% for l in likes %}
+<a href="/user/{{ l.author.nick|escape }}">{{ l.author.full_name|escape }}</a>,&nbsp;
+{% endfor %}	
+<br/>
+</p>  
+{% endif %}
 <p><a href="/">&laquo; Back to the blog</a></p>
 {% endblock %}

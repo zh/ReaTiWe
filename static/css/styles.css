@@ -52,7 +52,7 @@ table.subs td {
 table.subs td.int { text-align: center;}
 
 table.subs th {
-  background-color: #000;
+  background-color: #3b5998;
   color: #fff;
   padding: 4px;
   text-align: center;
@@ -87,7 +87,7 @@ a:hover {
 }
 
 #header {
-  background: black;
+  background: #3b5998;
   padding: 14px;
   padding-left: 15px;
   padding-right: 15px;

@@ -16,7 +16,7 @@
 <div id="entries">
   <ul>	  
   {% for m in micros %}
-  <li class="lien" style="background-image: url(http://img.tweetimag.es/i/{{ m.author.twit_user|escape }}_n)"><big><a href="/user/{{ m.author.nick|escape }}">{{ m.author.full_name|escape }}</a></big><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}</small></li>
+  <li class="lien" style="background-image: url(http://img.tweetimag.es/i/{{ m.author.twit_user|escape }}_n)"><big><a href="/user/{{ m.author.nick|escape }}">{{ m.author.full_name|escape }}</a></big><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}{% if m.likes %}, <img src="/images/smile.png" />{{ m.likes }} likes{% endif %}.</small></li>
   {% endfor %}
   </ul>	  
 </div>

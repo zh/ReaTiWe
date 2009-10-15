@@ -162,7 +162,7 @@ when you first login to the system. From your XMPP client send
  * __mine__ - show your own last 10 entries
  * __#1234__ - show some entry and comments to it, 1234 is an entry ID
  * __#1234 {text}__ - comment on some entry, 1234 is an entry ID
- * __like #1234 {text}__ - like an entry with ID=1234  (TODO)
+ * __like #1234 {text}__ - like an entry with ID=1234
  * __list__ - list all topic subscriptions
  * __sub {url} [alias] [hub]__ - subscribe to some topic (Atom feed) (alias is optional, default="feed")
  * __unsub {name}__ - unsubscribe from some topic

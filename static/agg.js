@@ -32,7 +32,7 @@ function gotStuff(status, text) {
         content += '; <a href="/entry/' + items[i].id + '">' + items[i].replies + ' replies</a>';
       }
       if (items[i].likes > 0) {
-        content += ', ' + items[i].likes + ' likes</a>';
+        content += ', <img src="/images/smile.png" />' + items[i].likes + ' likes</a>';
       }
       content += "</small></li>\n";
     }
