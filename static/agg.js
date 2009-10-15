@@ -31,6 +31,9 @@ function gotStuff(status, text) {
       if (items[i].replies > 0) {
         content += '; <a href="/entry/' + items[i].id + '">' + items[i].replies + ' replies</a>';
       }
+      if (items[i].likes > 0) {
+        content += ', ' + items[i].likes + ' likes</a>';
+      }
       content += "</small></li>\n";
     }
     content += "</ul>\n";	  

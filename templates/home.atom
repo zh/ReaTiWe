@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-<id>http://reatiwe.appspot.com/atom</id>
+<id>{{ site_url }}/atom</id>
 <title>ReaTiWe Public Timeline</title>
-<link rel="alternate" type="text/html" href="http://reatiwe.appspot.com/"/>
-<link rel="self" type="application/atom+xml" href="http://reatiwe.appspot.com/atom"/>
-<link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+<link rel="alternate" type="text/html" href="{{ site_url }}/"/>
+<link rel="self" type="application/atom+xml" href="{{ site_url }}/atom"/>
+<link rel="hub" href="{{ hub_url }}"/>
+<link rel="hub" href="{{ pushub_url }}"/>
 <author><name>ReaTiWe</name></author>
 <updated>{{ latest|rfc3339datetime }}</updated>
 {% for m in micros %}
 <entry>
-  <id>http://reatiwe.appspot.com/entry/{{ m|entityid }}</id>
+  <id>{{ site_url }}/entry/{{ m|entityid }}</id>
   <title type="text">{{ m.author.nick }}: {{ m.content|escape }}</title>
-  <link href="http://reatiwe.appspot.com/entry/{{ m|entityid }}" rel="alternate" type="text/html"/>
+  <link href="{{ site_url }}/entry/{{ m|entityid }}" rel="alternate" type="text/html"/>
   <published>{{ m.date|rfc3339datetime }}</published>
   <updated>{{ m.date|rfc3339datetime }}</updated>
   <summary type="text">{{ m.author.nick }}: {{ m.content|escape }}</summary>

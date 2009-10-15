@@ -33,7 +33,8 @@
 <form action="/topic" method="post" class="settings">
 <fieldset>
 <label>Topic: <input type="text" name="t_url" style="width: 500px" /></label>
-<label>Origin: <input type="text" name="t_origin" style="width: 250px" /></label>
+<label>Origin: <input type="text" name="t_origin" style="width: 250px" /></label><br/>
+<label>Hub: <input type="text" name="t_hub" value="{{ hub_url }}" style="width: 500px" /></label>
 </fieldset>
 <input type="submit" value="Subscribe" />
 </form>			
@@ -42,15 +43,17 @@
 <h2>Your Subscriptions</h2>   
 <table class="subs" cellspacing="0">
   <tr>    
-    <th>Name</th><th>URL</th><th>Origin</th><th>Valid?</th><th>&nbsp;</th>
+  <th>Name</th><th>URL</th><th>Origin</th><th>Hub</th><th>Valid?</th><th>&nbsp;</th><th>&nbsp;</th>
   </tr>   
   {% for t in topics %}
   <tr>    
   <td class="int"><b>{{ t }}</b></td>  
   <td>{{ t.url }}</td>        
   <td>{{ t.origin }}</td>
+  <td>{{ t.hub }}</td>
   <td class="int">{{ t.validated }}</td>
   <td><form style="display:inline;" action="/topic" method="post"><input type="hidden" name="t_name" value="{{ t.name }}" /><input type="submit" value="Delete" /></form></td>
+  <td><form style="display:inline;" action="/validate" method="post"><input type="hidden" name="t_name" value="{{ t.name }}" /><input type="submit" value="Validate" /></form></td>
   </tr>   
   {% endfor %}
 <table>	  

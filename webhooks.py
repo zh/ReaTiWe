@@ -7,12 +7,15 @@ from urlparse import urlparse
 from datetime import datetime
 from django.utils import simplejson
 from google.appengine.api import urlfetch
+from google.appengine.api.urlfetch import DownloadError 
 from google.appengine.api import memcache
 from google.appengine.api import xmpp
 from google.appengine.api import users
 from google.appengine.api.labs import taskqueue
 from google.appengine.ext import db, webapp
 from google.appengine.ext.webapp import template
+
+import settings
 
 from models import *
 from templatefilters import *
@@ -33,17 +36,17 @@ class PublishHandler(webapp.RequestHandler):
         raise ReatiweError("User %s does not exists." % nick)
       # ping the PuSH hub
       form_fields = { "hub.mode": "publish",
-                      "hub.url": "http://reatiwe.appspot.com/atom" }
+                      "hub.url": "%s/atom" % settings.SITE_URL }
       urlfetch.fetch(url = self.request.POST['hub'],
                      payload = urllib.urlencode(form_fields),
                      method = urlfetch.POST,
                      headers = {'Content-Type': 'application/x-www-form-urlencoded'})
       form_fields = { "hub.mode": "publish",
-                      "hub.url": "http://reatiwe.appspot.com/user/%s/atom" % nick }
+                      "hub.url": "%s/user/%s/atom" % (settings.SITE_URL, nick) }
       result = 200
       urllib2.urlopen(self.request.POST['hub'], urllib.urlencode(form_fields))
     except urllib2.HTTPError, e:
-      result = e.code
+      result = int(e.code)
       if result < 200 or result >= 300:
         logging.error('urllib2 problem: %s' % repr(e))
         pass
@@ -65,23 +68,65 @@ class SubscribeHandler(webapp.RequestHandler):
       else:
         mode = "subscribe"
       form_fields = { "hub.mode": mode,
-                      "hub.callback": "http://reatiwe.appspot.com/callback/%s" % topic.name,
+                      "hub.callback": "%s/callback/%s" % (settings.SITE_URL, topic.name),
                       "hub.topic": topic.url,
                       "hub.verify": "sync",
                       "hub.verify_token": topic.name }
       result = 200
-      urllib2.urlopen(self.request.POST['hub'], urllib.urlencode(form_fields))
+      url = self.request.POST['hub']
+      req = urllib2.Request(url, urllib.urlencode(form_fields))
+      o = urlparse.urlparse(url)
+      # superfeedr support
+      if o.username and o.password:
+        base64string = base64.encodestring('%s:%s' % (o.username, o.password))[:-1]
+        authheader =  "Basic %s" % base64string
+        new_url = "%s://%s%s" % (o.scheme, o.hostname, o.path)
+        req = urllib2.Request(new_url, urllib.urlencode(form_fields))
+        req.add_header("Authorization", authheader)
+      urllib2.urlopen(req)
+    except DownloadError, e:
+      logging.error('DownloadError: %s' % repr(e))
+      pass
     except urllib2.HTTPError, e:
-      result = e.code
+      result = int(e.code)
       if result < 200 or result >= 300:
         logging.error('urllib2 problem: %s' % repr(e))
         pass
-      else:
-        topic.validated = True
-        topic.put()
     except Exception, e:
       logging.error('problem: %s' % repr(e))
       pass
+    finally:
+      # superfeedr returning some strange errors (maybe timeout):
+      # problem: DownloadError('ApplicationError: 5 ',)
+      if mode == "subscribe":
+        topic.validated = True
+        topic.code = int(e.code)
+        topic.put()
+      else:
+        q = db.GqlQuery("SELECT * FROM MicroEntry where topic = :1", topic)
+        db.delete(q)
+        topic.delete()
+
+
+class ValidateHandler(webapp.RequestHandler):
+  def post(self):
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
+      if self.request.POST.get('t_name', None):
+        t = MicroTopic.all().filter('name =', self.request.POST['t_name']).get()
+        if t:
+          if t.hub:
+            hub = t.hub
+          else:
+            hub = settings.HUB_URL
+          taskqueue.add(url="/subscribe",
+                        params={"name":t.name, "mode":"subscribe", "hub":hub})
+      return self.redirect('/settings')
+    else:
+      login_url = users.create_login_url('/')
+      self.redirect(login_url)
 
 
 class TopicHandler(webapp.RequestHandler):
@@ -93,25 +138,22 @@ class TopicHandler(webapp.RequestHandler):
       if self.request.POST.get('t_name', None):
         t = MicroTopic.all().filter('name =', self.request.POST['t_name']).get()
         if t:
-          name = t.name
-          q = db.GqlQuery("SELECT * FROM MicroEntry where topic = :1", t)
-          db.delete(q)
-          t.delete()
+          if t.hub:
+            hub = t.hub
+          else:
+            hub = settings.HUB_URL
           taskqueue.add(url="/subscribe",
-                        params={"name": name,
-                                "mode": "unsubscribe",
-                                "hub": "https://pubsubhubbub.appspot.com/"})
+                        params={"name":t.name, "mode":"unsubscribe", "hub":hub})
       else:
         try:
           url = self.request.POST['t_url']
           origin = self.request.POST['t_origin']
-          if isValidURL(url) and isValidOrigin(origin):
-            t = MicroTopic(user=microUser, url=url, origin=origin)
+          hub = self.request.POST['t_hub'] 
+          if isValidURL(url) and isValidOrigin(origin) and isValidURL(hub):
+            t = MicroTopic(user=microUser, url=url, origin=origin, hub=hub, myown=False)
             t.put()
             taskqueue.add(url="/subscribe",
-                          params={"name":t.name,
-                                  "mode":"subscribe",
-                                  "hub":"https://pubsubhubbub.appspot.com/"})
+                          params={"name":t.name,"mode":"subscribe", "hub":t.hub})
         except Exception, e:
           pass
           error = str(e)
@@ -164,6 +206,7 @@ class ItemsHandler(webapp.RequestHandler):
                     'origin': origin(micro.origin),
                     'avatar': micro.author.twit_user,
                     'replies': micro.comments,
+                    'likes': micro.likes,
                     'content': content(micro.content)})
     data = encoder.encode(stuff)  
     if callback and valid_callback.match(callback):
@@ -234,13 +277,18 @@ class CallbackHandler(webapp.RequestHandler):
       content = stripTags(content)
       uniq_id='key_' + hashlib.sha1(link + '\n' + entry_id).hexdigest()
       exists = MicroEntry.gql("WHERE uniq_id = :1", uniq_id).get()
+      logging.info('New entry with title = "%s", id = "%s", '
+                   'link = "%s", content = "%s"',
+                   title, entry_id, link, content)
+      text = "[%s] \n" % title
+      text += "%s ...\n" % content[:200]
+      text += "%s" % link
+      xmpp_text += "%s\n\n" % text.replace('\n','').replace('\r',' ').replace('\t',' ')
       if not exists:
-        logging.info('New entry with title = "%s", id = "%s", '
-                     'link = "%s", content = "%s"',
-                     title, entry_id, link, content)
-        text = "[%s] \n" % title
-        text += "%s ...\n" % content[:200]
-        text += "%s" % link
+        if topic.myown:
+          myown = topic.myown
+        else:
+          myown = False  # external service
         update_list.append(MicroEntry(
           title=title,
           content=text,
@@ -248,10 +296,10 @@ class CallbackHandler(webapp.RequestHandler):
           link=link,
           uniq_id=uniq_id,
           topic=topic,
+          myown=myown,
           author=topic.user))
-        xmpp_text += "%s\n\n" % text.replace('\n','').replace('\r',' ').replace('\t',' ')
     db.put(update_list)
-    if len(update_list) > 0 and not topic.user.silent:
+    if len(data.entries) > 0 and not topic.user.silent:
       taskqueue.add(url="/send", params={"from":topic.user.nick, 
                                          "to":topic.user.nick, 
                                          "message":xmpp_text, 

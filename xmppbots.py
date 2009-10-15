@@ -9,6 +9,8 @@ from google.appengine.ext import db
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 
+import settings
+
 from templatefilters import *
 from models import *
 from webhooks import *
@@ -18,28 +20,30 @@ logging.getLogger().setLevel(logging.DEBUG)
 xmpp_help = """
 Available commands:
 
-help, ? - available commands
-ping - check the connection
+help, ?       - available commands
+ping          - check the connection
 auth {secret} - validate the current JID
 
 
 Available only after JID validation:
 
-on / off - enable / disable messages from the system
+on / off      - enable / disable messages from the system
 
-@nick - send a message to another system user
-@me - post an entry
+@nick         - send a message to another system user
+@me           - post an entry
 
-last - show last 10 entries
-#1234 - show some entry and comments to it
-#1234 {text} - comment on some entry
+last          - show last 10 entries from everybody
+mine          - show your own last 10 entries
+#1234         - show some entry and comments to it
+#1234 {text}  - comment on some entry
+like #1234    - like some entry (TODO)
 
-list - list all subscriptions
-sub {url} [alias] - subscribe to some topic (Atom feed)
-unsub {name} - unsubscribe from some topic
+list          - list all subscriptions
+sub {url} [alias] [hub] - subscribe to some topic (Atom feed)
+unsub {name}  - unsubscribe from some topic
 
-See also: http://reatiwe.appspot.com/help
-"""
+See also: %s/help
+""" % settings.SITE_URL
 
 
 class XMPPHandler(webapp.RequestHandler):
@@ -108,14 +112,22 @@ class XMPPHandler(webapp.RequestHandler):
       micros.reverse()
       for m in micros:
         content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
-        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) http://reatiwe.appspot.com/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), str(entityid(m)))
+        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), settings.SITE_URL, str(entityid(m)))
+      message.reply(text)
+    elif msg[0].lower() == u"mine":
+      text = "My own last messages:\n"
+      micros = MicroEntry.all().filter("author = ", microUser).order('-date').fetch(10)
+      micros.reverse()
+      for m in micros:
+        content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
+        text += "@%s:\n%s\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (m.author.nick, content, str(entityid(m)), timestamp(m.date), origin(m.origin), int(m.comments), settings.SITE_URL, str(entityid(m)))
       message.reply(text)
     elif msg[0].lower() == u"list":
       topics = db.GqlQuery("SELECT * FROM MicroTopic where user = :1", microUser)
       if topics.count() > 0:
         text = "Your subscriptions:\n"
         for t in topics:
-          text += "%s: %s" % (t.name, t.url)
+          text += "%s: %s [ %s ]" % (t.name, t.url, t.hub)
           if t.validated:
             text += " (valid)"
           text += "\n"  
@@ -129,18 +141,20 @@ class XMPPHandler(webapp.RequestHandler):
         t_url = msg[1]
       if len(msg) > 2:
         t_origin = msg[2]
+      if len(msg) > 3:
+        t_hub = msg[3]
+      else:
+        t_hub = settings.HUB_URL
       try:
-        if isValidURL(t_url) and isValidOrigin(t_origin):
+        if isValidURL(t_url) and isValidOrigin(t_origin) and isValidURL(t_hub):
           exists = MicroTopic.gql('WHERE url = :1', t_url).get()
           if exists:
             raise ReatiweError("Already subscribed to %s - %s" % (t_url, exists.name))
-          t = MicroTopic(user=microUser, url=t_url, origin=t_origin)
+          t = MicroTopic(user=microUser, url=t_url, origin=t_origin, hub=t_hub)
           t.put()
           taskqueue.add(url="/subscribe",
-                        params={"name":t.name,
-                                "mode":"subscribe",
-                                "hub":"https://pubsubhubbub.appspot.com/"})
-          message.reply("Subscribed %s: %s (%s)" % (t.name, t_url, t_origin))
+                        params={"name":t.name, "mode":"subscribe", "hub":t.hub})
+          message.reply("Subscribed %s: %s (%s), hub: %s" % (t.name, t.url, t.origin, t.hub))
       except Exception, e:
         pass
         message.reply(str(e))
@@ -149,18 +163,9 @@ class XMPPHandler(webapp.RequestHandler):
       if not topic:
         message.reply("Error: not authorized")
         return
-      name = topic.name
-      url = topic.url
-      q = db.GqlQuery("SELECT * FROM MicroEntry where topic = :1", topic)
-      if q.count() > 0:
-        results = q.fetch(q.count())
-        db.delete(results)
-      topic.delete()
       taskqueue.add(url="/subscribe",
-                    params={"name": name,
-                            "mode": "unsubscribe",
-                            "hub": "https://pubsubhubbub.appspot.com/"})
-      message.reply("Unsubscribed from %s" % url)
+                    params={"name": topic.name, "mode": "unsubscribe", "hub": topic.hub})
+      message.reply("Unsubscribed from %s" % topic.url)
     else:
       # regular expressions, heavy stuff
       pattern = re.compile('^@([a-z][a-z0-9]*)\s*(.*)')
@@ -177,8 +182,8 @@ class XMPPHandler(webapp.RequestHandler):
           micro.put()
           # ping the PuSH hub (current user).
           taskqueue.add(url="/publish", 
-                        params={"nick":microUser.nick, "hub":"https://pubsubhubbub.appspot.com/"})
-          message.reply("message sent: http://reatiwe.appspot.com/entry/%s" % str(entityid(micro)))
+                        params={"nick":microUser.nick, "hub":settings.HUB_URL})
+          message.reply("message sent: %s/entry/%s" % (settings.SITE_URL,str(entityid(micro))))
         # message to another user  
         else:  
           toUser = MicroUser.gql('WHERE nick = :1', to_nick).get()
@@ -206,7 +211,15 @@ class XMPPHandler(webapp.RequestHandler):
             text = msg.strip().replace('\n','').replace('\r',' ').replace('\t',' ')
             comment = Comment(author=microUser, content=text, origin=resource)
             addCommentEntry(entry, comment)
-            message.reply("Comment to entry #%s sent." % entityid(entry))
+            message.reply("Comment on entry #%s sent." % entityid(entry))
+            # send the comment to the entry author
+            if entry.author.validated and not entry.author.silent and microUser.nick != entry.author.nick:
+              text  = "comment on entry #%s:\n%s\n" % (entityid(entry), text)
+              text += "http://%s/entry/%s\n" % (settings.SITE_URL, entityid(entry))
+              taskqueue.add(url="/send", params={"from":microUser.nick,
+                                                 "to":entry.author.nick,
+                                                 "message":text,
+                                                 "secret":microUser.secret})
           else:  # display the entry itself
             text = "@%s:\n%s\n" % (entry.author.nick, entry.content)
             if int(entry.comments) > 0:
@@ -214,7 +227,7 @@ class XMPPHandler(webapp.RequestHandler):
               replies = Comment.all().filter('entry = ', entry).order('idx')
               for r in replies:
                 text += "#%d @%s:\n%s (%s ago from %s)\n\n" % (int(r.idx), r.author.nick, r.content, timestamp(r.date), origin(r.origin))
-            text += "\n#%s (%s ago from %s, %d replies) http://reatiwe.appspot.com/entry/%s\n\n" % (str(entityid(entry)), timestamp(entry.date), origin(entry.origin), int(entry.comments), str(entityid(entry)))
+            text += "\n#%s (%s ago from %s, %d replies) %s/entry/%s\n\n" % (str(entityid(entry)), timestamp(entry.date), origin(entry.origin), int(entry.comments), settings.SITE_URL, str(entityid(entry)))
             message.reply(text)
       else:  
         logging.debug("unknown msg: %s" % str(self.request.get('stanza')))

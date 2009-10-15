@@ -12,14 +12,14 @@ from google.appengine.ext.webapp import template
 from google.appengine.api.labs import taskqueue
 from google.appengine.api import memcache
 
+import settings
+
 from templatefilters import *
 from models import *
 from webhooks import *
 from xmppbots import *
 
 logging.getLogger().setLevel(logging.DEBUG)
-
-pagelimit = 20
 
 class BaseRequestHandler(webapp.RequestHandler):
   """Supplies a common header fixing function"""
@@ -45,14 +45,14 @@ class HomeHandler(BaseRequestHandler):
     else:
       page = 0
     page1 = page + 1  
-    if total > (page + 1) * pagelimit:
+    if total > (page + 1) * settings.PAGELIMIT:
       page_prev = str(page + 1)
     if page > 0:
       page_next = str(page - 1)
-    num_pages = int(total/pagelimit)
-    if total%pagelimit > 0 or total < pagelimit:
+    num_pages = int(total/settings.PAGELIMIT)
+    if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
       num_pages = num_pages + 1
-    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit))  
+    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT))  
     if micros.count() > 0:
       latest = micros[0].date
     else:
@@ -71,6 +71,9 @@ class HomeHandler(BaseRequestHandler):
     elif type == 'json':
       self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     path = os.path.join('templates/home.' + type)
+    hub_url = settings.HUB_URL
+    pushub_url = settings.PUSHUB_URL
+    site_url = settings.SITE_URL
     self.response.out.write(template.render(path, locals()))
                                                       
   def post(self):
@@ -86,7 +89,9 @@ class HomeHandler(BaseRequestHandler):
         # ping the PuSH hub (current user).
         # TODO: users can have different hubs
         taskqueue.add(url="/publish",
-                      params={"nick":microUser.nick, "hub":"https://pubsubhubbub.appspot.com/"})
+                      params={"nick":microUser.nick, "hub":settings.HUB_URL})
+        taskqueue.add(url="/publish",
+                      params={"nick":microUser.nick, "hub":settings.PUSHUB_URL})
       self.redirect('/')  
     else:
       login_url = users.create_login_url('/')
@@ -115,14 +120,14 @@ class UserHandler(BaseRequestHandler):
     else:
       page = 0
     page1 = page + 1  
-    if total > (page + 1) * pagelimit:
+    if total > (page + 1) * settings.PAGELIMIT:
       page_prev = str(page + 1)
     if page > 0:
       page_next = str(page - 1)
-    num_pages = int(total/pagelimit)
-    if total%pagelimit > 0 or total < pagelimit:
+    num_pages = int(total/settings.PAGELIMIT)
+    if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
       num_pages = num_pages + 1
-    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * pagelimit) + ', ' + str(pagelimit), nickUser)
+    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT), nickUser)
     if micros.count() > 0:
       latest = micros[0].date
     else:
@@ -135,6 +140,9 @@ class UserHandler(BaseRequestHandler):
     elif type == 'json':
       self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
     path = os.path.join('templates/user.' + type)
+    hub_url = settings.HUB_URL
+    pushub_url = settings.PUSHUB_URL
+    site_url = settings.SITE_URL
     self.response.out.write(template.render(path, locals()))
 
 
@@ -168,7 +176,16 @@ class CommentHandler(webapp.RequestHandler):
         content = content.replace('\n','').replace('\r',' ').replace('\t',' ')
         comment = Comment(author=microUser, content=content)
         addCommentEntry(entry, comment)
-      self.redirect("/entry/%s" % str(entryid))  
+        # send the comment to the entry owner (but not myself)
+        if entry.author.validated and not entry.author.silent and microUser.nick != entry.author.nick:
+          msg = "comment on entry #%d:\n" % int(entryid)
+          msg += content
+          msg += "\nhttp://%s/entry/%d\n" % (settings.SITE_URL, int(entryid)) 
+          taskqueue.add(url="/send", params={"from":microUser.nick, 
+                                             "to":entry.author.nick, 
+                                             "message":msg, 
+                                             "secret":microUser.secret})
+      self.redirect("/entry/%d" % int(entryid))  
     else:
       login_url = users.create_login_url('/')
       self.redirect(login_url) 
@@ -189,10 +206,12 @@ class SettingsHandler(webapp.RequestHandler):
       if microUser.full_name == None:
         microUser.full_name = microUser.nick
       topics = MicroTopic.all().filter('user =', microUser)  
+      hub_url = settings.HUB_URL
       self.response.out.write(template.render('templates/settings.html', locals()))
     else:
       login_url = users.create_login_url('/')
       self.redirect(login_url) 
+
   def post(self):
     user = users.get_current_user()
     if user:
@@ -274,11 +293,12 @@ def main():
     ('/topic',                     TopicHandler),
     ('/publish',                   PublishHandler),
     ('/subscribe',                 SubscribeHandler),
+    ('/validate',                  ValidateHandler),
     ('/send',                      SendHandler),
     ('/about',                     AboutHandler),
     ('/help',                      HelpHandler),
     ('/settings',                  SettingsHandler)
-  ], debug=True)
+  ], debug=settings.DEBUG)
   wsgiref.handlers.CGIHandler().run(application)
 
 if __name__ == "__main__":

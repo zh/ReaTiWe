@@ -63,9 +63,11 @@ Start microblogging, comment on entries, sending messages to other users:
 
     @me This is just a small test microblog message
     @dude hi, dude. I'm using ReaTiWe too
-    last   (will show you last 10 entries)
+    last   (will show everybody's last 10 entries)
     #3214  (will show you entry with ID=3214)
+    like #3214 (likes this entry)
     #3214 interesting stuff. this is my comment
+    mine   (will show your own last 10 entries)
     off (no more messages coming)
     on  (messages coming again)
 
@@ -99,7 +101,7 @@ On the same page, you can check when was the last time, when the hub got your fe
 If you want to aggregate some external Atom feeds with your entries, go to the
 [Settings](/settings) page and enter the _topic URL_ and (optional) the _origin_ (some
 string, you want to see in the _'from ...'_ part of the entries).
-The system will send subscribtion request to the 
+You can enter also some PuSH hub URL or use the default
 [PuSH reference hub](http://pubsubhubbub.appspot.com/): _"hub.mode"="subscribe"_,
 _"hub.callback"="http://reatiwe.appspot.com/callback/{some_secret}"_
 
@@ -113,7 +115,8 @@ new for the system (checking atom entries IDs and links) are aggregated.
 You can also subscribe/unsubscribe from the XMPP bot (commands follows):
 
     list (show all your subscriptions)
-    sub http://somefeed.example.com/feed SomeFeed  (origin='SomeFeed')
+    sub http://somefeed.example.com/feed SomeFeed http://hub.com/  (origin='SomeFeed', 
+                                                                    hub='http://hub.com/')
     unsub Xx12eW  (unsubscribe from topic with name=Xx12eW)
   
 There is also an XMPP messages send webhook (__POST__ requests), available on URL:
@@ -155,18 +158,20 @@ when you first login to the system. From your XMPP client send
  * __on / off__ - enable / disable messages from the system
  * __@nick__ - send a message to another system user
  * __@me {text}__ - post an entry
- * __last__ - show last 10 entries
+ * __last__ - show last 10 entries from everybody
+ * __mine__ - show your own last 10 entries
  * __#1234__ - show some entry and comments to it, 1234 is an entry ID
  * __#1234 {text}__ - comment on some entry, 1234 is an entry ID
+ * __like #1234 {text}__ - like an entry with ID=1234  (TODO)
  * __list__ - list all topic subscriptions
- * __sub {url} [alias]__ - subscribe to some topic (Atom feed) (alias is optional, default="feed")
+ * __sub {url} [alias] [hub]__ - subscribe to some topic (Atom feed) (alias is optional, default="feed")
  * __unsub {name}__ - unsubscribe from some topic
 
 ## Use cases
 
  * Simple microblog with web and XMPP input
  * PuSH publisher
- * Push subscriber
+ * PuSH subscriber ([supporting also SuperFeedr](http://bloggitation.appspot.com/entry/using-reatiwe-like-a-superfeedr-subscriber))
  * [Web-to-XMPP gateway](http://bloggitation.appspot.com/entry/using-reatiwe-like-a-web-to-xmpp-gateway)
  * [PuSH-to-XMPP gateway](http://bloggitation.appspot.com/entry/using-reatiwe-like-a-push-to-xmpp-gateway)
  * SocNode (TODO, still missing _/friends/{user}_ feed)

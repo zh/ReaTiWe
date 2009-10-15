@@ -5,6 +5,8 @@ import os.path
 from google.appengine.api import users
 from google.appengine.ext import db
 
+import settings
+
 def baseN(num,b,numerals="0123456789abcdefghijklmnopqrstuvwxyz"):
   return ((num == 0) and  "0" ) or (baseN(num // b, b).lstrip("0") + numerals[num % b])
 
@@ -50,7 +52,7 @@ def isValidSecret(secret):
 
 def isValidURL(url):
   pieces = urlparse.urlparse(url)
-  if all([pieces.scheme, pieces.netloc]) and set(pieces.netloc) <= set(string.letters + string.digits + '-.:') and pieces.scheme in ['http', 'https', 'ftp']:
+  if all([pieces.scheme, pieces.netloc]) and set(pieces.netloc) <= set(string.letters + string.digits + '-.:@') and pieces.scheme in ['http', 'https', 'ftp']:
     return True
   else:
     raise ReatiweError("Invalid URL")
@@ -86,8 +88,11 @@ class MicroTopic(db.Model):
   user     = db.Reference(MicroUser, collection_name='topics')
   name     = db.StringProperty(required=True)
   url      = db.StringProperty(required=True)
+  hub      = db.StringProperty(default=settings.HUB_URL)
   origin   = db.StringProperty(default="feed")
+  code     = db.IntegerProperty(default=0)
   validated = db.BooleanProperty(default=False)
+  myown    = db.BooleanProperty(default=True)  # own feed or external service
   created  = db.DateTimeProperty(auto_now_add=True)
   updated  = db.DateTimeProperty(auto_now=True)
 
@@ -107,10 +112,26 @@ class MicroEntry(db.Model):
   link    = db.StringProperty()   # link if entry come from some feed
   uniq_id = db.StringProperty()   # uniq key
   origin  = db.StringProperty(default="web")    # web, xmpp etc.
+  myown   = db.BooleanProperty(default=True)  # own feed or external service
   comments = db.IntegerProperty(default=0)
+  likes   = db.IntegerProperty(default=0)
 
   def __str__(self):
     return self.content
+
+
+class Like(db.Model):
+  entry   = db.Reference(MicroEntry, collection_name='impressions')
+  author  = db.Reference(MicroUser, collection_name='likes')
+  date    = db.DateTimeProperty(auto_now_add=True)
+
+
+def addLikeEntry(entry, like):
+  entry.likes = entry.likes + 1
+  entry.put()
+  like.entry = entry
+  like.put()
+  return like
 
 
 class Comment(db.Model):

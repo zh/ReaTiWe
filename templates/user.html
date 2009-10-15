@@ -1,8 +1,9 @@
 {% extends 'sidebar.html' %}
 {% block title %}{{ nick }}'s Posts{% endblock %}
 {% block head %}
-<link rel="alternate" type="application/atom+xml" href="http://reatiwe.appspot.com/user/{{ nick }}/atom" title="{{ nick }}'s timeline atom feed" />
-<link rel="hub" href="https://pubsubhubbub.appspot.com/" />
+<link rel="alternate" type="application/atom+xml" href="{{ site_url }}/user/{{ nick }}/atom" title="{{ nick }}'s timeline atom feed" />
+<link rel="hub" href="{{ pushub_url }}"/>
+<link rel="hub" href="{{ hub_url }}" />
 {% endblock %}
 {% block content %}
 <h2><img src="http://img.tweetimag.es/i/{{ nickUser.twit_user|escape }}_b" /> {{ nickUser.full_name }} ({{ nick }})</h2>
