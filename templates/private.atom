@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<id>{{ site_url }}/user/{{ nick }}</id>
+<title>{{ nick }}'s Timeline</title>
+<link rel="alternate" type="text/html" href="{{ site_url }}/user/{{ nick }}"/>
+<link rel="self" type="application/atom+xml" href="{{ site_url }}/user/{{ nick }}/atom"/>
+<link rel="hub" href="{{ pushub_url }}"/>
+<link rel="hub" href="{{ hub_url }}"/>
+<author><name>{{ nick }}</name></author>
+<updated>{{ latest|rfc3339datetime }}</updated>
+{% for m in micros %}
+<entry>
+  <id>{{ site_url }}/entry/{{ m|entityid }}</id>
+  <title type="text">{{ m.author.nick }}: {{ m.content|escape }}</title>
+  <link href="{{ site_url }}/entry/{{ m|entityid }}" rel="alternate" type="text/html"/>
+  <published>{{ m.date|rfc3339datetime }}</published>
+  <updated>{{ m.date|rfc3339datetime }}</updated>
+  <summary type="text">{{ m.author.nick }}: {{ m.content|escape }}</summary>
+  <author><name>{{ m.author.full_name|escape }} ({{ m.author.nick }})</name></author>
+</entry>
+{% endfor %}
+</feed>

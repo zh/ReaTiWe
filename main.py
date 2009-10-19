@@ -65,7 +65,7 @@ class HomeHandler(BaseRequestHandler):
       login_url = users.create_login_url('/')
 
     # pagination
-    total = db.GqlQuery('SELECT * FROM MicroEntry').count()
+    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE myown = True').count()
     page = self.request.get('page')
     if page:
       page = int(page)
@@ -79,7 +79,7 @@ class HomeHandler(BaseRequestHandler):
     num_pages = int(total/settings.PAGELIMIT)
     if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
       num_pages = num_pages + 1
-    micros = db.GqlQuery('SELECT * FROM MicroEntry ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT))
+    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE myown = True ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT))
     latest = datetime.now()
     if micros.count() > 0:
       latest = micros[0].date
@@ -123,6 +123,49 @@ class UserHandler(BaseRequestHandler):
       return
     
     # pagination
+    total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 AND myown = True', nickUser).count()
+    page = self.request.get('page')
+    if page:
+      page = int(page)
+    else:
+      page = 0
+    page1 = page + 1  
+    if total > (page + 1) * settings.PAGELIMIT:
+      page_prev = str(page + 1)
+    if page > 0:
+      page_next = str(page - 1)
+    num_pages = int(total/settings.PAGELIMIT)
+    if total % settings.PAGELIMIT > 0 or total < settings.PAGELIMIT:
+      num_pages = num_pages + 1
+    
+    micros = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1 AND myown = True ORDER BY date DESC LIMIT ' + str(page * settings.PAGELIMIT) + ', ' + str(settings.PAGELIMIT), nickUser)
+    latest = datetime.now()
+    if micros.count() > 0:
+      latest = micros[0].date
+    e_count = nickUser.micros.count()  
+    c_count = nickUser.comments.count()  
+    l_count = nickUser.likes.count()  
+    return self.show(micros, "user", locals(), type)  
+
+# Only for the current user
+class PrivateHandler(BaseRequestHandler):
+  def get(self, nick, type='html'):
+    nickUser = MicroUser.gql("WHERE nick = :1", nick).get()
+
+    # authentication
+    user = users.get_current_user()
+    if user:
+      logout_url = users.create_logout_url("/")
+      microUser = getMicroUser(user)
+      # you can see only your own feed
+      if microUser.nick != nick or not nickUser:
+        self.redirect('/')
+        return
+    else:
+      login_url = users.create_login_url('/')
+      return self.redirect(login_url) 
+    
+    # pagination
     total = db.GqlQuery('SELECT * FROM MicroEntry WHERE author = :1', nickUser).count()
     page = self.request.get('page')
     if page:
@@ -142,10 +185,7 @@ class UserHandler(BaseRequestHandler):
     latest = datetime.now()
     if micros.count() > 0:
       latest = micros[0].date
-    e_count = nickUser.micros.count()  
-    c_count = nickUser.comments.count()  
-    l_count = nickUser.likes.count()  
-    return self.show(micros, "user", locals(), type)  
+    return self.show(micros, "private", locals(), type)  
 
 
 class LikesHandler(BaseRequestHandler):
@@ -235,7 +275,7 @@ class SettingsHandler(webapp.RequestHandler):
       return self.response.out.write(template.render('templates/settings.html', locals()))
     else:
       login_url = users.create_login_url('/')
-      self.redirect(login_url) 
+      return self.redirect(login_url) 
 
   def post(self):
     user = users.get_current_user()
@@ -308,6 +348,8 @@ def main():
     (r'/(atom|json)',              HomeHandler),
     (r'/user/([^/]*)',             UserHandler),
     (r'/user/([^/]*)/(atom|json)', UserHandler),
+    (r'/private/([^/]*)',          PrivateHandler),
+    (r'/private/([^/]*)/(atom|json)', PrivateHandler),
     (r'/likes/([^/]*)',            LikesHandler),
     (r'/likes/([^/]*)/(atom|json)', LikesHandler),
     (r'/callback/([^/]*)',         CallbackHandler),

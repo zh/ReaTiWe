@@ -1,5 +1,6 @@
 SITE_NAME  = u"ReaTiWe"
 SITE_URL   = u"http://reatiwe.appspot.com"
 HUB_URL    = u"https://pubsubhubbub.appspot.com/"
+PUSHUB_URL = u"http://pushub.appspot.com/"
 PAGELIMIT  = 20
 DEBUG      = False

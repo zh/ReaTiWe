@@ -84,17 +84,17 @@ class XMPPHandler(webapp.RequestHandler):
       message.reply("Error: not authorized")
       return
     # validated JID
-    ### --------------------------------------------------------
+    ### ON ### --------------------------------------------------------
     if msg[0].lower() == u"on":
       microUser.silent = False
       microUser.put()
       message.reply("Messages: ON")
-    ### --------------------------------------------------------
+    ### OFF ### --------------------------------------------------------
     elif msg[0].lower() == u"off":
       microUser.silent = True
       microUser.put()
       message.reply("Messages: OFF")
-    ### --------------------------------------------------------
+    ### NICK ### --------------------------------------------------------
     elif msg[0].lower() == u"nick":
       if len(msg) > 1:
         nick = msg[1]
@@ -109,10 +109,10 @@ class XMPPHandler(webapp.RequestHandler):
           pass
           message.reply(str(e))
       message.reply("nickname: %s" % microUser.nick)
-    ### --------------------------------------------------------
+    ### LAST ### --------------------------------------------------------
     elif msg[0].lower() == u"last":
       text = "Last messages:\n"
-      micros = MicroEntry.all().order('-date').fetch(10)
+      micros = MicroEntry.all().filter('myown =', True).order('-date').fetch(10)
       micros.reverse()
       for m in micros:
         content = m.content.replace('\n','').replace('\r',' ').replace('\t',' ')
@@ -121,7 +121,7 @@ class XMPPHandler(webapp.RequestHandler):
         text += ", %d replies, %d likes)" % (int(m.comments), int(m.likes))
         text += " %s/entry/%s\n\n" % (settings.SITE_URL, str(entityid(m)))
       message.reply(text)
-    ### --------------------------------------------------------
+    ### MINE ### --------------------------------------------------------
     elif msg[0].lower() == u"mine":
       text = "My own last messages:\n"
       micros = MicroEntry.all().filter("author = ", microUser).order('-date').fetch(10)
@@ -133,7 +133,7 @@ class XMPPHandler(webapp.RequestHandler):
         text += ", %d replies, %d likes)" % (int(m.comments), int(m.likes))
         text += " %s/entry/%s\n\n" % (settings.SITE_URL, str(entityid(m)))
       message.reply(text)
-    ### --------------------------------------------------------
+    ### LIKE ### --------------------------------------------------------
     elif msg[0].lower() == u"like":
       if len(msg) > 1:
         text = "@%s liked " % microUser.nick
@@ -142,7 +142,7 @@ class XMPPHandler(webapp.RequestHandler):
         if em and em.group(1):
           entryid = int(em.group(1))
           entry = MicroEntry.get_by_id(entryid)
-          if not entry:
+          if not entry or not entry.myown or entry.myown == False:
             text += "non existing entry"
           else:
             exists = Like.gql('WHERE author = :1 AND entry = :2', microUser, entry).get()
@@ -162,7 +162,7 @@ class XMPPHandler(webapp.RequestHandler):
       else:
         text = "What you like?"
       message.reply(text)
-    ### --------------------------------------------------------
+    ### LIST ### --------------------------------------------------------
     elif msg[0].lower() == u"list":
       topics = db.GqlQuery("SELECT * FROM MicroTopic where user = :1", microUser)
       if topics.count() > 0:
@@ -175,7 +175,7 @@ class XMPPHandler(webapp.RequestHandler):
         message.reply(text)
       else:
         message.reply("No subscriptions")
-    ### --------------------------------------------------------
+    ### SUB ### --------------------------------------------------------
     elif msg[0].lower() == u"sub":
       url = ""
       t_origin = "feed"
@@ -200,7 +200,7 @@ class XMPPHandler(webapp.RequestHandler):
       except Exception, e:
         pass
         message.reply(str(e))
-    ### --------------------------------------------------------
+    ### UNSUB ### --------------------------------------------------------
     elif msg[0].lower() == u"unsub":
       topic = MicroTopic.all().filter('name =', msg[1]).get()
       if not topic:
@@ -215,7 +215,7 @@ class XMPPHandler(webapp.RequestHandler):
       pattern1 = re.compile('^#([0-9]*)\s*(.*)')
       m = pattern.match(message.body)
       m1 = pattern1.match(message.body)
-    ### --------------------------------------------------------
+    ### @nick ### --------------------------------------------------------
       if m and m.group(2):
         to_nick = m.group(1)
         msg = m.group(2)
@@ -243,12 +243,13 @@ class XMPPHandler(webapp.RequestHandler):
                                                  "message":msg, 
                                                  "secret":microUser.secret})
               message.reply("message to %s sent." % to_nick)
-    ### --------------------------------------------------------
+    ### #1234 ### --------------------------------------------------------
       elif m1 and m1.group(1):
         to_entry = m1.group(1)
         entry = MicroEntry.get_by_id(int(to_entry))
-        if not entry:
-          message.reply("Error: no such entry.")
+        # you cannot see private entries
+        if not entry or not entry.myown or entry.myown == False:
+          message.reply("Error: no such entry or not authorized.")
           return
         else:
           if m1.group(2): # Comment to some entry

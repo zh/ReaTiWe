@@ -189,15 +189,11 @@ class SendHandler(webapp.RequestHandler):
 
 
 class ItemsHandler(webapp.RequestHandler):
-  def get(self, nick='all'):
+  def get(self):
     callback = self.request.get('callback', default_value='')
     encoder = simplejson.JSONEncoder()
     stuff = []
-    microUser = MicroUser.gql("WHERE nick = :1", nick).get()
-    if not microUser or nick == 'all':
-      micros = MicroEntry.all().order('-date').fetch(pagelimit)
-    else:  
-      micros = MicroEntry.all().filter('author = ', microUser).order('-date').fetch(pagelimit)
+    micros = MicroEntry.all().filter('myown = ', True).order('-date').fetch(pagelimit)
     for micro in micros:
       stuff.append({'id': entityid(micro),
                     'date': timestamp(micro.date),
@@ -285,10 +281,10 @@ class CallbackHandler(webapp.RequestHandler):
       text += "%s" % link
       xmpp_text += "%s\n\n" % text.replace('\n','').replace('\r',' ').replace('\t',' ')
       if not exists:
-        if topic.myown:
-          myown = topic.myown
-        else:
-          myown = False  # external service
+        #if topic.myown:
+        #  myown = topic.myown
+        #else:
+        myown = False  # external service
         update_list.append(MicroEntry(
           title=title,
           content=text,
