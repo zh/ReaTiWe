@@ -142,9 +142,22 @@ class UserHandler(BaseRequestHandler):
     latest = datetime.now()
     if micros.count() > 0:
       latest = micros[0].date
-    e_count = nickUser.micros.count()  
-    c_count = nickUser.comments.count()  
-    l_count = nickUser.likes.count()  
+    if type == 'html':  
+      e_count = nickUser.micros.count()  
+      c_count = nickUser.comments.count()  
+      l_count = nickUser.likes.count()
+
+      # trying to get the XMPP presence for the user's JID
+      if nickUser.validated:
+        result = urlfetch.fetch("%s/last/%s/text" % (settings.PAAS_URL, nickUser.jid.address))
+        if result.status_code == 200:
+          decoder = simplejson.JSONDecoder()
+          jdata = decoder.decode(result.content)
+          if not jdata.has_key('message'):
+            jdata['message'] = jdata['status']
+        else:
+          jdata = { 'time':timestamp(datetime.now()) , 'status':'unknown', 'message':'unknown' }
+
     return self.show(micros, "user", locals(), type)  
 
 # Only for the current user

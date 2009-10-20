@@ -10,14 +10,19 @@
   <div id="userinfo">	
     <div id="avatar"><img src="http://img.tweetimag.es/i/{{ nickUser.twit_user|escape }}_b" /></div>
     <div id="userstatus">
-      <h1>{{ nickUser.full_name }} ({{ nick|escape }})</h1>
-      <div class="status">	    
-      <ul>
-        <li>Entries: {{ e_count }}</li>
-        <li>Comments: {{ c_count }}</li>
-        <li>Likes: {{ l_count }}</li>
-      </ul>  
-      </div>
+	    <h1>{{ nickUser.full_name }} ({{ nick|escape }})</h1>
+    {% if nickUser.validated %}	    
+    <div class="status">
+      <img src="/images/{{ jdata.status }}.png" title="{{ jdata.since }}" />
+      <span title="{{ jdata.message }}">{{ jdata.status }}</span>
+    </div>
+    {% endif %}
+    <br/>
+    <ul>
+      <li>Entries: {{ e_count }}</li>
+      <li>Comments: {{ c_count }}</li>
+      <li>Likes: {{ l_count }}</li>
+    </ul>  
     </div>
   </div>
   <div id="userlinks">
