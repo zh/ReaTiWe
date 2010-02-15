@@ -150,11 +150,14 @@ class UserHandler(BaseRequestHandler):
       # trying to get the XMPP presence for the user's JID
       if nickUser.validated:
         result = urlfetch.fetch("%s/last/%s/text" % (settings.PAAS_URL, nickUser.jid.address))
+        has_message = False
         if result.status_code == 200:
           decoder = simplejson.JSONDecoder()
           jdata = decoder.decode(result.content)
           if not jdata.has_key('message'):
             jdata['message'] = jdata['status']
+          else:  
+            has_message = True
         else:
           jdata = { 'time':timestamp(datetime.now()) , 'status':'unknown', 'message':'unknown' }
 
@@ -283,6 +286,8 @@ class SettingsHandler(webapp.RequestHandler):
         microUser.twit_user = "default"
       if microUser.full_name == None:
         microUser.full_name = microUser.nick
+      if microUser.profile == None:
+        microUser.profile = microUser.nick
       topics = MicroTopic.all().filter('user =', microUser)  
       hub_url = settings.HUB_URL
       return self.response.out.write(template.render('templates/settings.html', locals()))
@@ -297,6 +302,7 @@ class SettingsHandler(webapp.RequestHandler):
       microUser = getMicroUser(user)
       nick = self.request.get('nick').strip()
       full_name = self.request.get('full_name').strip()
+      profile = self.request.get('profile').strip()
       jid = self.request.get('jid').strip()
       secret = self.request.get('secret').strip()
       twit_user = self.request.get('twit_user').strip()
@@ -307,9 +313,10 @@ class SettingsHandler(webapp.RequestHandler):
           raise ReatiweError("Nickname not available.")
         elif len(full_name) > 64 or len(full_name) < 4:
           raise  ReatiweError("Full name must be between 4 and 64 characters long.")
-        elif isValidNick(nick) and isValidSecret(secret):
+        elif isValidNick(nick) and isValidNick(profile) and isValidSecret(secret):
           microUser.nick = nick
           microUser.full_name = full_name
+          microUser.profile = profile
           if microUser.jid and microUser.jid.address != jid:
             microUser.validated = False
           microUser.jid = db.IM("xmpp", jid)

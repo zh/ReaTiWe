@@ -4,6 +4,7 @@
 <link rel="alternate" type="application/atom+xml" href="{{ site_url }}/user/{{ nick|escape }}/atom" title="{{ nick|escape }}'s timeline atom feed" />
 <link rel="hub" href="{{ pushub_url }}"/>
 <link rel="hub" href="{{ hub_url }}" />
+<link rel="me" type="text/html" href="http://www.google.com/profiles/{{ nickUser.profile }}"/> 
 {% endblock %}
 {% block content %}
 <div id="user">
@@ -14,7 +15,10 @@
     {% if nickUser.validated %}	    
     <div class="status">
       <img src="/images/{{ jdata.status }}.png" title="{{ jdata.since }}" />
-      <span title="{{ jdata.message }}">{{ jdata.status }}</span>
+      {{ jdata.status }}
+      {% if has_message %}	    
+      ({{ jdata.message }})
+      {% endif %}
     </div>
     {% endif %}
     <br/>
@@ -34,13 +38,14 @@
 </div>
 
 <hr/>
-<div class="br"></div>
+<br/>
+<br/>
 
 <h2>{{ nick|escape }}'s entries</h2>
 <div id="entries">
   <ul>	  
   {% for m in micros %}
-  <li class="lien" style="padding-left: 10px;"><div>{{ m.content|escape|content }}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a class="reply" href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}{% if m.likes %}, <span class="like">{{ m.likes }} likes</span>{% endif %}.</small></li>
+  <li class="lien" style="padding-left: 10px;"><div><div>{% if m.is_image %}<a href="{{ m.link }}"><img src="{{ m.content }}" /></a>{% else %}{{ m.content|escape|content }}{% endif %}</div><small><a href="/entry/{{ m|entityid }}">#{{ m|entityid }}</a> from {{ m.origin|origin }}, <span title="{{ m.date|rfc3339datetime }}">{{ m.date|timestamp }} ago</span>{% if m.comments %}; <a class="reply" href="/entry/{{ m|entityid }}">{{ m.comments }} replies</a>{% endif %}{% if m.likes %}, <span class="like">{{ m.likes }} likes</span>{% endif %}.</small></li>
   {% endfor %}
   </ul>	  
 </div>

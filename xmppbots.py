@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import logging, datetime, urllib
+import logging, datetime, urllib, urllib2
 
 from google.appengine.api import urlfetch
 from google.appengine.api import memcache
@@ -8,6 +8,7 @@ from google.appengine.api import xmpp
 from google.appengine.ext import db
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
+from django.utils import simplejson
 
 import settings
 
@@ -229,6 +230,43 @@ class XMPPHandler(webapp.RequestHandler):
                         params={"nick":microUser.nick, "hub":settings.HUB_URL})
           message.reply("message sent: %s/entry/%s" % (settings.SITE_URL,str(entityid(micro))))
         # message to another user  
+        elif to_nick == u"img" or to_nick == u"image":
+          #message.reply("img published: %s/entry/%s" % (settings.SITE_URL,str(entityid(micro))))
+          try:
+            args = [x.strip() for x in text.split() if x != None]
+            if len(args) > 1:
+              t_link = args[1]
+            else:
+              t_link = args[0]
+            form_fields = { "key": settings.IMG_KEY, "image" : args[0] }
+            result = urlfetch.fetch(url = settings.IMG_URL,
+                                    payload = urllib.urlencode(form_fields),
+                                    method = urlfetch.POST)
+            logging.debug("upload %s to %s" % (args[0], settings.IMG_URL))
+            if result.status_code == 200:
+              decoder = simplejson.JSONDecoder()
+              jdata = decoder.decode(result.content)
+              logging.debug("upload result: %s" % repr(jdata))
+              if jdata["rsp"]["stat"] == "fail":
+                raise "Upload error: %s" % jdata["rsp"]["error_msg"]
+              imgtext = jdata["rsp"]["image"]["small_thumbnail"]
+              micro = MicroEntry(author=microUser, type=u"image", content=imgtext, origin=resource, link=t_link)
+              micro.put()
+              message.reply("image published: %s (delete - %s)" % (jdata["rsp"]["image"]["small_thumbnail"], 
+                                                                  jdata["rsp"]["image"]["delete_page"]))
+              return
+            else:
+              raise "Upload error: code %d" % result.status_code
+          except urllib2.HTTPError, e:
+            result = int(e.code)
+            if result < 200 or result >= 300:
+              logging.error('urllib2 problem: %s' % repr(e))
+            pass
+            return
+          except Exception, e:
+            logging.error('problem: %s' % repr(e))
+            pass
+            return
         else:  
           toUser = MicroUser.gql('WHERE nick = :1', to_nick).get()
           if not toUser:
@@ -261,7 +299,7 @@ class XMPPHandler(webapp.RequestHandler):
             # send the comment to the entry author
             if entry.author.validated and not entry.author.silent and microUser.nick != entry.author.nick:
               text  = "comment on entry #%s:\n%s\n" % (entityid(entry), text)
-              text += "http://%s/entry/%s\n" % (settings.SITE_URL, entityid(entry))
+              text += "%s/entry/%s\n" % (settings.SITE_URL, entityid(entry))
               taskqueue.add(url="/send", params={"from":microUser.nick,
                                                  "to":entry.author.nick,
                                                  "message":text,

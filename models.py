@@ -27,6 +27,8 @@ def stripTags(s):
 
 
 def isValidNick(nick):
+  if nick in ["image", "audio", "video", "link", "text", "photo", "quote", "chat"]:
+    raise ReatiweError("Nickname not available.")
   if len(nick) > 32 or len(nick) < 4:
     raise ReatiweError("Nickname must be between 4 and 32 characters long.")
   if re.match('^[a-z][a-z0-9]*$', nick) == None:
@@ -73,6 +75,7 @@ class MicroUser(db.Model):
   secret = db.StringProperty() 
   twit_user = db.StringProperty(default="default") 
   twit_pass = db.StringProperty()
+  profile = db.StringProperty()  # google profile
   silent = db.BooleanProperty(default=False)
   validated = db.BooleanProperty(default=False)
 
@@ -111,6 +114,7 @@ class MicroEntry(db.Model):
   topic   = db.Reference(MicroTopic, collection_name='topics')
   link    = db.StringProperty()   # link if entry come from some feed
   uniq_id = db.StringProperty()   # uniq key
+  type    = db.StringProperty(default="text")   # text, image, audio etc.
   origin  = db.StringProperty(default="web")    # web, xmpp etc.
   myown   = db.BooleanProperty(default=True)  # own feed or external service
   comments = db.IntegerProperty(default=0)
@@ -118,6 +122,11 @@ class MicroEntry(db.Model):
 
   def __str__(self):
     return self.content
+
+  def is_image(self):
+    if self.type and self.type == u"image":
+      return True
+    return False
 
 
 class Like(db.Model):
@@ -162,7 +171,7 @@ def getMicroUser(user):
     nick = nick.string[nick.start(0):nick.end(0)]
     while MicroUser.gql('WHERE name = :1', nick).get():
       nick += str(random.randint(1000, 9999))
-    microUser = MicroUser(user=user, nick=nick, full_name=nick)
+    microUser = MicroUser(user=user, nick=nick, full_name=nick, profile=nick)
     microUser.jid = db.IM("xmpp", user.email())
     microUser.put()
   return microUser
