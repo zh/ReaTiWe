@@ -2,8 +2,6 @@
 {% block title %}{{ nick|escape }}'s Posts{% endblock %}
 {% block head %}
 <link rel="alternate" type="application/atom+xml" href="{{ site_url }}/user/{{ nick|escape }}/atom" title="{{ nick|escape }}'s timeline atom feed" />
-<link rel="hub" href="{{ pushub_url }}"/>
-<link rel="hub" href="{{ hub_url }}" />
 <link rel="me" type="text/html" href="http://www.google.com/profiles/{{ nickUser.profile }}"/> 
 {% endblock %}
 {% block content %}
